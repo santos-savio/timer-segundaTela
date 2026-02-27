@@ -17,7 +17,8 @@ class ControlWindow:
             "bg_color": "#000000",
             "fg_color": "#FFFFFF",
             "font_family": "Arial",
-            "font_size": 120
+            "font_size": 120,
+            "transparent": False
         }
         
         # Criar janela principal
@@ -68,7 +69,7 @@ class ControlWindow:
             height=2
         )
         self.preview_label.pack(fill="x")
-        
+
         # Configuração de tempo
         time_frame = ttk.LabelFrame(main_frame, text="Tempo Inicial", padding="10")
         time_frame.pack(fill="x", pady=(0, 10))
@@ -353,16 +354,19 @@ class ControlWindow:
         """Aplica a nova formatação"""
         self.current_format = new_format.copy()
         
+        # No preview do controle, não usamos transparência real; mostramos a cor escolhida
+        bg_color = new_format["bg_color"]
+        
         # Atualizar preview
         try:
             self.preview_label.config(
-                bg=new_format["bg_color"],
+                bg=bg_color,
                 fg=new_format["fg_color"],
                 font=(new_format["font_family"], 48)
             )
         except:
             self.preview_label.config(
-                bg=new_format["bg_color"],
+                bg=bg_color,
                 fg=new_format["fg_color"],
                 font=("Arial", 48)
             )
@@ -373,7 +377,8 @@ class ControlWindow:
                 new_format["bg_color"],
                 new_format["fg_color"],
                 new_format["font_family"],
-                new_format["font_size"]
+                new_format["font_size"],
+                new_format.get("transparent", False)
             )
     
     def run(self):

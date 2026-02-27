@@ -82,6 +82,16 @@ class FormatModal:
         self.bg_color_label = ttk.Label(bg_frame, text=self.temp_format["bg_color"])
         self.bg_color_label.pack(side="left")
         
+        # Checkbox para transparência
+        self.transparency_var = tk.BooleanVar(value=self.temp_format.get("transparent", False))
+        self.transparency_check = ttk.Checkbutton(
+            bg_frame,
+            text="Translúcido",
+            variable=self.transparency_var,
+            command=self._update_preview
+        )
+        self.transparency_check.pack(side="right", padx=(10, 0))
+        
         # Cor do texto
         fg_frame = ttk.Frame(colors_frame)
         fg_frame.pack(fill="x", pady=5)
@@ -202,17 +212,21 @@ class FormatModal:
         """Atualiza o preview com as configurações atuais"""
         self.temp_format["font_family"] = self.font_family_var.get()
         self.temp_format["font_size"] = self.font_size_var.get()
+        self.temp_format["transparent"] = self.transparency_var.get()
+        
+        # No preview do modal, não usamos cor inválida. Sempre mostrar a cor escolhida.
+        bg_color = self.temp_format["bg_color"]
         
         try:
             self.preview_label.config(
-                bg=self.temp_format["bg_color"],
+                bg=bg_color,
                 fg=self.temp_format["fg_color"],
                 font=(self.temp_format["font_family"], min(self.temp_format["font_size"], 60))
             )
         except:
             # Se a fonte não existir, usa a padrão
             self.preview_label.config(
-                bg=self.temp_format["bg_color"],
+                bg=bg_color,
                 fg=self.temp_format["fg_color"],
                 font=("Arial", min(self.temp_format["font_size"], 60))
             )
@@ -223,7 +237,8 @@ class FormatModal:
             "bg_color": "#000000",
             "fg_color": "#FFFFFF", 
             "font_family": "Arial",
-            "font_size": 120
+            "font_size": 120,
+            "transparent": False
         }
         
         self.temp_format = default_format.copy()
@@ -235,6 +250,7 @@ class FormatModal:
         self.fg_color_label.config(text=default_format["fg_color"])
         self.font_family_var.set(default_format["font_family"])
         self.font_size_var.set(default_format["font_size"])
+        self.transparency_var.set(default_format["transparent"])
         
         self._update_preview()
     

@@ -263,13 +263,31 @@ class TimerWindow:
         """Atualiza o display do timer"""
         self.timer_label.config(text=time_str)
     
-    def update_formatting(self, bg_color: str, fg_color: str, font_family: str, font_size: int):
+    def update_formatting(self, bg_color: str, fg_color: str, font_family: str, font_size: int, transparent: bool = False):
         """Atualiza a formatação do timer"""
         self.bg_color = bg_color
         self.fg_color = fg_color
         self.font_family = font_family
         self.font_size = font_size
-        
+
+        # Configurar transparência usando a cor de fundo escolhida como chave
+        if transparent:
+            try:
+                # Define a cor bg_color como transparente para a janela inteira
+                self.window.attributes('-transparentcolor', bg_color)
+            except Exception:
+                pass
+            # Garantir que tanto a janela quanto o label usem a mesma cor-chave
+            self.window.configure(bg=bg_color)
+        else:
+            # Remover transparência se suportado
+            try:
+                self.window.attributes('-transparentcolor', '')
+            except Exception:
+                pass
+            # Em modo normal, alinhar a cor de fundo da janela ao label
+            self.window.configure(bg=bg_color)
+
         self.timer_label.config(bg=bg_color, fg=fg_color)
         self._update_font()
     
