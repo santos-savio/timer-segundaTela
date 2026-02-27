@@ -816,6 +816,7 @@ class ControlWindow:
         load_window.resizable(False, False)
         load_window.transient(self.window)
         load_window.grab_set()
+        load_window.focus_set()
         
         # Centralizar modal
         load_window.update_idletasks()
@@ -876,5 +877,6 @@ class ControlWindow:
             load_window.destroy()
         
         load_window.protocol("WM_DELETE_WINDOW", on_cancel)
+        load_window.bind("<Escape>", lambda e: on_cancel())
         ttk.Button(buttons_frame, text="Carregar", command=on_select).pack(side="left", padx=(0, 5))
         ttk.Button(buttons_frame, text="Cancelar", command=on_cancel).pack(side="left")
