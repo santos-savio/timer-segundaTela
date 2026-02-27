@@ -23,7 +23,7 @@ class ControlWindow:
         # Criar janela principal
         self.window = tk.Tk()
         self.window.title("Timer Control")
-        self.window.geometry("400x640")
+        self.window.geometry("400x670")
         self.window.resizable(False, False)
         
         # Criar interface
@@ -206,6 +206,14 @@ class ControlWindow:
             command=self._toggle_adjust
         )
         self.adjust_check.pack(anchor="w")
+        
+        # Botão para centralizar na posição inferior direita
+        self.center_btn = ttk.Button(
+            options_frame,
+            text="Centralizar Inferior Direito",
+            command=self._center_bottom_right
+        )
+        self.center_btn.pack(anchor="w", pady=(5, 0))
     
     def _setup_callbacks(self):
         """Configura os callbacks do timer logic"""
@@ -307,6 +315,31 @@ class ControlWindow:
         is_locked = not self.adjust_var.get()
         if self.timer_window is not None:
             self.timer_window.set_locked(is_locked)
+    
+    def _center_bottom_right(self):
+        """Centraliza a janela do timer na posição inferior direita da tela"""
+        if self.timer_window is not None:
+            # Obter dimensões da tela
+            screen_width = self.timer_window.window.winfo_screenwidth()
+            screen_height = self.timer_window.window.winfo_screenheight()
+            
+            # Obter dimensões da janela do timer
+            window_width = self.timer_window.window.winfo_width()
+            window_height = self.timer_window.window.winfo_height()
+            
+            # Calcular posição inferior direita (com margem de 20px)
+            x = screen_width - window_width - 20
+            y = screen_height - window_height - 20
+            
+            # Aplicar nova posição
+            self.timer_window.window.geometry(f"+{x}+{y}")
+            
+            # Se a janela estiver oculta, mostrar brevemente para feedback visual
+            if not self.is_projected:
+                self.timer_window.window.deiconify()
+                self.timer_window.window.lift()
+                # Opcional: esconder após 2 segundos se não estiver projetado
+                # self.window.after(2000, lambda: self.timer_window.hide() if not self.is_projected else None)
     
     def _open_format_modal(self):
         """Abre o modal de formatação"""

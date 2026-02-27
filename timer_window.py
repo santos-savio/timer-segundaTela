@@ -211,16 +211,8 @@ class TimerWindow:
         self.resize_mode = None
     
     def _constrain_position(self, x, y):
-        """Restringe a posição da janela dentro dos limites da tela"""
-        width = self.window.winfo_width()
-        height = self.window.winfo_height()
-        
-        # Limitar posição X
-        x = max(0, min(x, self.screen_width - width))
-        
-        # Limitar posição Y (considerando barra de tarefas)
-        y = max(0, min(y, self.screen_height - height))
-        
+        """Remove limites de posição para permitir movimentação entre múltiplas telas"""
+        # Sem restrições - permite movimentação livre entre telas
         return x, y
     
     def _on_motion(self, event):
