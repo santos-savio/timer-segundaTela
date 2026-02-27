@@ -36,6 +36,9 @@ class ControlWindow:
         # Configurar callbacks
         self._setup_callbacks()
         
+        # Configurar atalhos de teclado
+        self._setup_shortcuts()
+        
         # Estado da projeção
         self.is_projected = False
         
@@ -258,6 +261,94 @@ class ControlWindow:
             command=self._load_preset
         )
         self.load_preset_btn.pack(side="left", padx=(0, 5))
+    
+    def _setup_shortcuts(self):
+        """Configura os atalhos de teclado da janela de controle"""
+        
+        def _is_in_input(event):
+            """Verifica se o foco atual está em um campo de entrada"""
+            focused = self.window.focus_get()
+            return isinstance(focused, (ttk.Spinbox, tk.Entry))
+        
+        def on_focus_hours(event):
+            if not _is_in_input(event):
+                self.hours_spin.focus_set()
+                return "break"
+        
+        def on_focus_minutes(event):
+            if not _is_in_input(event):
+                self.minutes_spin.focus_set()
+                return "break"
+        
+        def on_focus_seconds(event):
+            if not _is_in_input(event):
+                self.seconds_spin.focus_set()
+                return "break"
+        
+        def on_space(event):
+            if not _is_in_input(event):
+                state = self.timer_logic.get_state()
+                if state == "running":
+                    self._pause_timer()
+                else:
+                    self._start_timer()
+                return "break"
+        
+        def on_start(event):
+            self._start_timer()
+            return "break"
+        
+        def on_reset(event):
+            self._reset_timer()
+            return "break"
+        
+        def on_format(event):
+            self._open_format_modal()
+            return "break"
+        
+        def on_save_preset(event):
+            self._save_preset()
+            return "break"
+        
+        def on_load_preset(event):
+            self._load_preset()
+            return "break"
+        
+        def on_project(event):
+            self.project_var.set(not self.project_var.get())
+            self._toggle_projection()
+            return "break"
+        
+        def on_center_bottom_right(event):
+            self._center_bottom_right()
+            return "break"
+        
+        # Atalhos sem CTRL (H, M, S, Espaço) - apenas quando fora de campos de entrada
+        self.window.bind("<h>", on_focus_hours)
+        self.window.bind("<H>", on_focus_hours)
+        self.window.bind("<m>", on_focus_minutes)
+        self.window.bind("<M>", on_focus_minutes)
+        self.window.bind("<s>", on_focus_seconds)
+        self.window.bind("<S>", on_focus_seconds)
+        self.window.bind("<space>", on_space)
+        
+        # Atalhos com CTRL
+        self.window.bind("<Control-i>", on_start)
+        self.window.bind("<Control-I>", on_start)
+        self.window.bind("<Control-r>", on_reset)
+        self.window.bind("<Control-R>", on_reset)
+        self.window.bind("<Control-f>", on_format)
+        self.window.bind("<Control-F>", on_format)
+        self.window.bind("<Control-c>", on_load_preset)
+        self.window.bind("<Control-C>", on_load_preset)
+        self.window.bind("<Control-p>", on_project)
+        self.window.bind("<Control-P>", on_project)
+        
+        # Salvar preset: Ctrl+Shift+S
+        self.window.bind("<Control-S>", on_save_preset)
+        
+        # Centralizar inferior direito: Ctrl+Shift+Baixo
+        self.window.bind("<Control-Shift-Down>", on_center_bottom_right)
     
     def _setup_callbacks(self):
         """Configura os callbacks do timer logic"""
@@ -632,6 +723,14 @@ class ControlWindow:
     
     def _load_preset(self):
         """Abre modal para carregar preset"""
+        if hasattr(self, '_load_window') and self._load_window is not None:
+            try:
+                if self._load_window.winfo_exists():
+                    self._load_window.lift()
+                    return
+            except Exception:
+                pass
+        self._load_window = None
         # Listar presets disponíveis
         presets = self._list_presets()
         
@@ -641,6 +740,7 @@ class ControlWindow:
         
         # Criar modal de seleção
         load_window = tk.Toplevel(self.window)
+        self._load_window = load_window
         load_window.title("Carregar Preset")
         load_window.geometry("400x300")
         load_window.resizable(False, False)
@@ -690,6 +790,7 @@ class ControlWindow:
             
             if preset_data:
                 self._apply_preset(preset_data)
+                self._load_window = None
                 load_window.destroy()
         
         def on_double_click(event):
@@ -700,5 +801,10 @@ class ControlWindow:
         preset_listbox.bind("<Double-Button-1>", on_double_click)
         
         # Botões
+        def on_cancel():
+            self._load_window = None
+            load_window.destroy()
+        
+        load_window.protocol("WM_DELETE_WINDOW", on_cancel)
         ttk.Button(buttons_frame, text="Carregar", command=on_select).pack(side="left", padx=(0, 5))
-        ttk.Button(buttons_frame, text="Cancelar", command=load_window.destroy).pack(side="left")
+        ttk.Button(buttons_frame, text="Cancelar", command=on_cancel).pack(side="left")
