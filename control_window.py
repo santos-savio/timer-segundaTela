@@ -4,8 +4,11 @@ Janela de controle principal do timer.
 """
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox, simpledialog
 from format_modal import FormatModal
+import os
+import csv
+from datetime import datetime
 
 class ControlWindow:
     def __init__(self, timer_logic, timer_window=None):
@@ -24,7 +27,7 @@ class ControlWindow:
         # Criar janela principal
         self.window = tk.Tk()
         self.window.title("Timer Control")
-        self.window.geometry("550x470")
+        self.window.geometry("550x550")
         self.window.resizable(False, False)
         
         # Criar interface
@@ -231,6 +234,30 @@ class ControlWindow:
         # Configurar pesos das colunas do container controle/opções
         control_options_container.grid_columnconfigure(0, weight=7)
         control_options_container.grid_columnconfigure(1, weight=3)
+        
+        # Frame de presets
+        presets_frame = ttk.LabelFrame(main_frame, text="Presets", padding="10")
+        presets_frame.pack(fill="x", pady=(0, 10))
+        
+        # Frame dos botões de presets
+        preset_buttons_frame = ttk.Frame(presets_frame)
+        preset_buttons_frame.pack(fill="x")
+        
+        # Botão Salvar Preset
+        self.save_preset_btn = ttk.Button(
+            preset_buttons_frame,
+            text="Salvar Preset",
+            command=self._save_preset
+        )
+        self.save_preset_btn.pack(side="left", padx=(0, 5))
+        
+        # Botão Carregar Preset
+        self.load_preset_btn = ttk.Button(
+            preset_buttons_frame,
+            text="Carregar Preset",
+            command=self._load_preset
+        )
+        self.load_preset_btn.pack(side="left", padx=(0, 5))
     
     def _setup_callbacks(self):
         """Configura os callbacks do timer logic"""
@@ -404,3 +431,274 @@ class ControlWindow:
     def destroy(self):
         """Fecha a janela"""
         self.window.destroy()
+    
+    # Métodos de gerenciamento de presets
+    
+    def _get_presets_folder(self):
+        """Obtém o caminho da pasta de presets"""
+        return os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Timer_segunda_tela')
+    
+    def _ensure_presets_folder(self):
+        """Cria a pasta de presets se não existir"""
+        presets_folder = self._get_presets_folder()
+        if not os.path.exists(presets_folder):
+            os.makedirs(presets_folder)
+        return presets_folder
+    
+    def _list_presets(self):
+        """Lista todos os presets disponíveis"""
+        presets_folder = self._ensure_presets_folder()
+        presets = []
+        
+        for file in os.listdir(presets_folder):
+            if file.endswith('.csv'):
+                preset_name = file[:-4]  # Remove .csv
+                presets.append(preset_name)
+        
+        return sorted(presets)
+    
+    def _read_preset(self, preset_name):
+        """Lê os dados de um preset"""
+        presets_folder = self._get_presets_folder()
+        preset_file = os.path.join(presets_folder, f"{preset_name}.csv")
+        
+        try:
+            with open(preset_file, 'r', newline='', encoding='utf-8') as file:
+                reader = csv.reader(file)
+                row = next(reader)
+                
+                return {
+                    'name': row[0],
+                    'hours': int(row[1]),
+                    'minutes': int(row[2]),
+                    'seconds': int(row[3]),
+                    'mode': row[4],
+                    'x': int(row[5]),
+                    'y': int(row[6]),
+                    'width': int(row[7]),
+                    'height': int(row[8]),
+                    'bg_color': row[9],
+                    'fg_color': row[10],
+                    'font_family': row[11],
+                    'font_size': int(row[12]),
+                    'transparent': row[13].lower() == 'true'
+                }
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao ler preset: {e}")
+            return None
+    
+    def _write_preset(self, preset_name, preset_data):
+        """Escreve os dados de um preset"""
+        presets_folder = self._ensure_presets_folder()
+        preset_file = os.path.join(presets_folder, f"{preset_name}.csv")
+        
+        try:
+            with open(preset_file, 'w', newline='', encoding='utf-8') as file:
+                writer = csv.writer(file)
+                writer.writerow([
+                    preset_data['name'],
+                    preset_data['hours'],
+                    preset_data['minutes'],
+                    preset_data['seconds'],
+                    preset_data['mode'],
+                    preset_data['x'],
+                    preset_data['y'],
+                    preset_data['width'],
+                    preset_data['height'],
+                    preset_data['bg_color'],
+                    preset_data['fg_color'],
+                    preset_data['font_family'],
+                    preset_data['font_size'],
+                    preset_data['transparent']
+                ])
+            return True
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar preset: {e}")
+            return False
+    
+    def _collect_current_settings(self):
+        """Coleta todas as configurações atuais"""
+        # Obter tempo atual
+        hours = self.hours_var.get()
+        minutes = self.minutes_var.get()
+        seconds = self.seconds_var.get()
+        
+        # Obter modo atual
+        mode = self.mode_var.get()
+        
+        # Obter posição e tamanho da janela do timer
+        x, y, width, height = 0, 0, 800, 400  # Valores padrão
+        if self.timer_window is not None:
+            try:
+                geometry = self.timer_window.get_geometry()
+                # Parse geometry string (format: "widthxheight+x+y")
+                parts = geometry.split('+')
+                if len(parts) >= 3:
+                    size_part = parts[0]
+                    x = int(parts[1])
+                    y = int(parts[2])
+                    size_parts = size_part.split('x')
+                    if len(size_parts) >= 2:
+                        width = int(size_parts[0])
+                        height = int(size_parts[1])
+            except Exception:
+                pass  # Usa valores padrão em caso de erro
+        
+        # Obter formatação atual
+        fmt = self.current_format
+        
+        return {
+            'hours': hours,
+            'minutes': minutes,
+            'seconds': seconds,
+            'mode': mode,
+            'x': x,
+            'y': y,
+            'width': width,
+            'height': height,
+            'bg_color': fmt['bg_color'],
+            'fg_color': fmt['fg_color'],
+            'font_family': fmt['font_family'],
+            'font_size': fmt['font_size'],
+            'transparent': fmt['transparent']
+        }
+    
+    def _apply_preset(self, preset_data):
+        """Aplica as configurações de um preset"""
+        try:
+            # Aplicar tempo
+            self.hours_var.set(preset_data['hours'])
+            self.minutes_var.set(preset_data['minutes'])
+            self.seconds_var.set(preset_data['seconds'])
+            self._on_time_change()
+            
+            # Aplicar modo
+            self.mode_var.set(preset_data['mode'])
+            self._on_mode_change()
+            
+            # Aplicar posição e tamanho se a janela do timer existir
+            if self.timer_window is not None:
+                geometry = f"{preset_data['width']}x{preset_data['height']}+{preset_data['x']}+{preset_data['y']}"
+                self.timer_window.set_geometry(geometry)
+            
+            # Aplicar formatação
+            new_format = {
+                'bg_color': preset_data['bg_color'],
+                'fg_color': preset_data['fg_color'],
+                'font_family': preset_data['font_family'],
+                'font_size': preset_data['font_size'],
+                'transparent': preset_data['transparent']
+            }
+            self._apply_formatting(new_format)
+            
+            messagebox.showinfo("Sucesso", f"Preset '{preset_data['name']}' carregado com sucesso!")
+            
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao aplicar preset: {e}")
+    
+    def _save_preset(self):
+        """Abre modal para salvar preset"""
+        # Obter nome do preset
+        preset_name = simpledialog.askstring(
+            "Salvar Preset",
+            "Digite o nome do preset:",
+            parent=self.window
+        )
+        
+        if not preset_name or not preset_name.strip():
+            return  # Usuário cancelou ou não digitou nada
+        
+        preset_name = preset_name.strip()
+        
+        # Validar nome
+        if any(char in preset_name for char in '\\/:*?"<>|'):
+            messagebox.showerror("Erro", "Nome do preset contém caracteres inválidos!")
+            return
+        
+        # Verificar se já existe
+        presets_folder = self._ensure_presets_folder()
+        preset_file = os.path.join(presets_folder, f"{preset_name}.csv")
+        if os.path.exists(preset_file):
+            if not messagebox.askyesno("Sobrescrever", f"O preset '{preset_name}' já existe. Deseja sobrescrever?"):
+                return
+        
+        # Coletar configurações atuais
+        settings = self._collect_current_settings()
+        settings['name'] = preset_name
+        
+        # Salvar preset
+        if self._write_preset(preset_name, settings):
+            messagebox.showinfo("Sucesso", f"Preset '{preset_name}' salvo com sucesso!")
+    
+    def _load_preset(self):
+        """Abre modal para carregar preset"""
+        # Listar presets disponíveis
+        presets = self._list_presets()
+        
+        if not presets:
+            messagebox.showinfo("Info", "Nenhum preset encontrado.")
+            return
+        
+        # Criar modal de seleção
+        load_window = tk.Toplevel(self.window)
+        load_window.title("Carregar Preset")
+        load_window.geometry("400x300")
+        load_window.resizable(False, False)
+        load_window.transient(self.window)
+        load_window.grab_set()
+        
+        # Centralizar modal
+        load_window.update_idletasks()
+        x = (load_window.winfo_screenwidth() // 2) - (400 // 2)
+        y = (load_window.winfo_screenheight() // 2) - (300 // 2)
+        load_window.geometry(f"+{x}+{y}")
+        
+        # Frame principal
+        main_frame = ttk.Frame(load_window, padding="20")
+        main_frame.pack(fill="both", expand=True)
+        
+        # Label
+        ttk.Label(main_frame, text="Selecione um preset:").pack(anchor="w", pady=(0, 10))
+        
+        # Listbox
+        listbox_frame = ttk.Frame(main_frame)
+        listbox_frame.pack(fill="both", expand=True, pady=(0, 10))
+        
+        scrollbar = ttk.Scrollbar(listbox_frame)
+        scrollbar.pack(side="right", fill="y")
+        
+        preset_listbox = tk.Listbox(listbox_frame, yscrollcommand=scrollbar.set)
+        preset_listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=preset_listbox.yview)
+        
+        # Adicionar presets à listbox
+        for preset in presets:
+            preset_listbox.insert(tk.END, preset)
+        
+        # Frame dos botões
+        buttons_frame = ttk.Frame(main_frame)
+        buttons_frame.pack(fill="x")
+        
+        def on_select():
+            """Carrega o preset selecionado"""
+            selection = preset_listbox.curselection()
+            if not selection:
+                return
+            
+            selected_preset = presets[selection[0]]
+            preset_data = self._read_preset(selected_preset)
+            
+            if preset_data:
+                self._apply_preset(preset_data)
+                load_window.destroy()
+        
+        def on_double_click(event):
+            """Carrega preset com duplo clique"""
+            on_select()
+        
+        # Bind duplo clique
+        preset_listbox.bind("<Double-Button-1>", on_double_click)
+        
+        # Botões
+        ttk.Button(buttons_frame, text="Carregar", command=on_select).pack(side="left", padx=(0, 5))
+        ttk.Button(buttons_frame, text="Cancelar", command=load_window.destroy).pack(side="left")
