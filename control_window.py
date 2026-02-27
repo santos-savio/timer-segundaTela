@@ -24,7 +24,7 @@ class ControlWindow:
         # Criar janela principal
         self.window = tk.Tk()
         self.window.title("Timer Control")
-        self.window.geometry("400x670")
+        self.window.geometry("550x470")
         self.window.resizable(False, False)
         
         # Criar interface
@@ -70,9 +70,13 @@ class ControlWindow:
         )
         self.preview_label.pack(fill="x")
 
-        # Configuração de tempo
-        time_frame = ttk.LabelFrame(main_frame, text="Tempo Inicial", padding="10")
-        time_frame.pack(fill="x", pady=(0, 10))
+        # Container horizontal para tempo e modo
+        time_mode_container = ttk.Frame(main_frame)
+        time_mode_container.pack(fill="x", pady=(0, 10))
+        
+        # Configuração de tempo (lado esquerdo)
+        time_frame = ttk.LabelFrame(time_mode_container, text="Tempo Inicial", padding="10")
+        time_frame.grid(row=0, column=0, sticky="ew", padx=(0, 5))
         
         # Campos de tempo
         time_input_frame = ttk.Frame(time_frame)
@@ -125,9 +129,9 @@ class ControlWindow:
         )
         update_time_btn.pack(pady=(10, 0))
         
-        # Modo do timer
-        mode_frame = ttk.LabelFrame(main_frame, text="Modo", padding="10")
-        mode_frame.pack(fill="x", pady=(0, 10))
+        # Modo do timer (lado direito)
+        mode_frame = ttk.LabelFrame(time_mode_container, text="Modo", padding="10")
+        mode_frame.grid(row=0, column=1, sticky="ew", padx=(5, 0))
         
         self.mode_var = tk.StringVar(value="countdown")
         ttk.Radiobutton(
@@ -146,9 +150,17 @@ class ControlWindow:
             command=self._on_mode_change
         ).pack(anchor="w")
         
-        # Botões de controle
-        control_frame = ttk.LabelFrame(main_frame, text="Controle", padding="10")
-        control_frame.pack(fill="x", pady=(0, 10))
+        # Configurar pesos das colunas do container tempo/modo
+        time_mode_container.grid_columnconfigure(0, weight=7)
+        time_mode_container.grid_columnconfigure(1, weight=3)
+        
+        # Container horizontal para controle e opções
+        control_options_container = ttk.Frame(main_frame)
+        control_options_container.pack(fill="x", pady=(0, 10))
+        
+        # Botões de controle (lado esquerdo)
+        control_frame = ttk.LabelFrame(control_options_container, text="Controle", padding="10")
+        control_frame.grid(row=0, column=0, sticky="ew", padx=(0, 5))
         
         # Frame dos botões principais
         buttons_frame = ttk.Frame(control_frame)
@@ -184,9 +196,9 @@ class ControlWindow:
         )
         self.format_btn.pack(fill="x", pady=(10, 0))
         
-        # Opções
-        options_frame = ttk.LabelFrame(main_frame, text="Opções", padding="10")
-        options_frame.pack(fill="x", pady=(0, 10))
+        # Opções (lado direito)
+        options_frame = ttk.LabelFrame(control_options_container, text="Opções", padding="10")
+        options_frame.grid(row=0, column=1, sticky="ew", padx=(5, 0))
         
         # Projetar/Ocultar
         self.project_var = tk.BooleanVar(value=False)
@@ -215,6 +227,10 @@ class ControlWindow:
             command=self._center_bottom_right
         )
         self.center_btn.pack(anchor="w", pady=(5, 0))
+        
+        # Configurar pesos das colunas do container controle/opções
+        control_options_container.grid_columnconfigure(0, weight=7)
+        control_options_container.grid_columnconfigure(1, weight=3)
     
     def _setup_callbacks(self):
         """Configura os callbacks do timer logic"""
