@@ -24,6 +24,7 @@ class TimerWindow:
         # Estado da janela
         self.is_locked = True
         self.is_visible = False
+        self._font_manually_set = False
         
         # Variáveis para redimensionamento
         self.resize_mode = None  # None, 'left', 'right', 'top', 'bottom', 'corner'
@@ -112,6 +113,10 @@ class TimerWindow:
             on_bottom = event.y > height - edge_threshold
             
             # Determinar tipo de redimensionamento
+            # Se for redimensionamento nas bordas, liberar ajuste automático de fonte
+            if on_left or on_right or on_top or on_bottom:
+                self._font_manually_set = False
+            
             if on_left and on_top:
                 self.resize_mode = 'top_left'
             elif on_right and on_top:
@@ -253,7 +258,8 @@ class TimerWindow:
     def _on_configure(self, event):
         """Evento ao redimensionar a janela"""
         # Ajustar tamanho da fonte proporcionalmente ao tamanho da janela
-        if not self.is_locked:
+        # Apenas quando a janela está desbloqueada E a fonte não foi definida manualmente
+        if not self.is_locked and not self._font_manually_set:
             new_size = max(20, min(event.height // 3, 120))  # Limite máximo de 120pt
             if new_size != self.font_size:
                 self.font_size = new_size
@@ -269,6 +275,7 @@ class TimerWindow:
         self.fg_color = fg_color
         self.font_family = font_family
         self.font_size = font_size
+        self._font_manually_set = True
 
         # Configurar transparência usando a cor de fundo escolhida como chave
         if transparent:
