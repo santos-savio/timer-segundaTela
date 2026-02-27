@@ -8,8 +8,9 @@ from tkinter import font as tkfont
 import platform
 
 class TimerWindow:
-    def __init__(self):
-        self.window = tk.Tk()
+    def __init__(self, master=None):
+        # Usar Toplevel para evitar múltiplas janelas raiz
+        self.window = tk.Toplevel(master=master)
         self.window.title("Timer Display")
         
         # Configurações iniciais
@@ -62,6 +63,9 @@ class TimerWindow:
         # Always on top quando travado
         if self.is_locked:
             self.window.attributes("-topmost", True)
+        
+        # Começar oculto para evitar flash ao iniciar a aplicação
+        self.window.withdraw()
     
     def _setup_bindings(self):
         """Configura eventos de mouse para movimentação e redimensionamento"""

@@ -21,14 +21,20 @@ class TimerApp:
     def __init__(self):
         # Criar instâncias das classes principais
         self.timer_logic = TimerLogic()
-        self.timer_window = TimerWindow()
-        self.control_window = ControlWindow(self.timer_logic, self.timer_window)
+        # Criar primeiro a janela de controle (janela raiz)
+        self.control_window = ControlWindow(self.timer_logic, timer_window=None)
+        # Criar a janela do timer como filha (Toplevel) da janela de controle
+        self.timer_window = TimerWindow(master=self.control_window.window)
+        # Associar a janela do timer ao controlador
+        self.control_window.timer_window = self.timer_window
         
         # Configurar tratamento de fechamento
         self.control_window.window.protocol("WM_DELETE_WINDOW", self._on_closing)
         
-        # Inicializar timer com tempo padrão
+        # Inicializar timer com tempo padrão e forçar atualização
         self.timer_logic.set_time(0, 1, 0)  # 1 minuto padrão
+        # Forçar atualização inicial do preview
+        self.control_window._on_timer_update(self.timer_logic.format_time())
     
     def _on_closing(self):
         """Trata o evento de fechamento da aplicação"""

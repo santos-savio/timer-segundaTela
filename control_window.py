@@ -8,7 +8,7 @@ from tkinter import ttk
 from format_modal import FormatModal
 
 class ControlWindow:
-    def __init__(self, timer_logic, timer_window):
+    def __init__(self, timer_logic, timer_window=None):
         self.timer_logic = timer_logic
         self.timer_window = timer_window
         
@@ -201,8 +201,19 @@ class ControlWindow:
     
     def _setup_callbacks(self):
         """Configura os callbacks do timer logic"""
-        self.timer_logic.set_update_callback(self._on_timer_update)
-        self.timer_logic.set_state_callback(self._on_state_change)
+        # Encaminhar callbacks para o thread da UI com after
+        def _safe_update(time_str: str):
+            try:
+                self.window.after(0, lambda: self._on_timer_update(time_str))
+            except Exception:
+                pass
+        def _safe_state(state: str):
+            try:
+                self.window.after(0, lambda: self._on_state_change(state))
+            except Exception:
+                pass
+        self.timer_logic.set_update_callback(_safe_update)
+        self.timer_logic.set_state_callback(_safe_state)
     
     def _on_timer_update(self, time_str: str):
         """Callback para atualização do timer"""
@@ -210,7 +221,7 @@ class ControlWindow:
         self.preview_label.config(text=time_str)
         
         # Atualizar janela do timer se estiver visível
-        if self.is_projected:
+        if self.is_projected and self.timer_window is not None:
             self.timer_window.update_time(time_str)
     
     def _on_state_change(self, state: str):
@@ -231,6 +242,8 @@ class ControlWindow:
         minutes = self.minutes_var.get()
         seconds = self.seconds_var.get()
         self.timer_logic.set_time(hours, minutes, seconds)
+        # Forçar atualização do preview
+        self._on_timer_update(self.timer_logic.format_time())
     
     def _on_mode_change(self):
         """Callback para mudança no modo"""
@@ -253,7 +266,19 @@ class ControlWindow:
         """Alterna a projeção da janela do timer"""
         self.is_projected = self.project_var.get()
         
+        if self.timer_window is None:
+            return
+        
         if self.is_projected:
+            # Aplicar formatação e tempo atuais antes de mostrar
+            fmt = self.current_format
+            try:
+                self.timer_window.update_formatting(
+                    fmt["bg_color"], fmt["fg_color"], fmt["font_family"], fmt["font_size"]
+                )
+            except Exception:
+                pass
+            self.timer_window.update_time(self.timer_logic.format_time())
             self.timer_window.show()
         else:
             self.timer_window.hide()
@@ -261,7 +286,8 @@ class ControlWindow:
     def _toggle_adjust(self):
         """Alterna o ajuste de posição e tamanho"""
         is_locked = not self.adjust_var.get()
-        self.timer_window.set_locked(is_locked)
+        if self.timer_window is not None:
+            self.timer_window.set_locked(is_locked)
     
     def _open_format_modal(self):
         """Abre o modal de formatação"""
@@ -290,12 +316,13 @@ class ControlWindow:
             )
         
         # Atualizar janela do timer
-        self.timer_window.update_formatting(
-            new_format["bg_color"],
-            new_format["fg_color"],
-            new_format["font_family"],
-            new_format["font_size"]
-        )
+        if self.timer_window is not None:
+            self.timer_window.update_formatting(
+                new_format["bg_color"],
+                new_format["fg_color"],
+                new_format["font_family"],
+                new_format["font_size"]
+            )
     
     def run(self):
         """Inicia o loop principal da janela"""
