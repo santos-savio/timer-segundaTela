@@ -175,6 +175,7 @@ class ControlWindow:
         self.start_btn = ttk.Button(
             buttons_frame,
             text="Iniciar",
+            underline=-1,
             command=self._start_timer
         )
         self.start_btn.pack(side="left", padx=(0, 5))
@@ -182,6 +183,7 @@ class ControlWindow:
         self.pause_btn = ttk.Button(
             buttons_frame,
             text="Pausar",
+            underline=-1,
             command=self._pause_timer,
             state="disabled"
         )
@@ -190,6 +192,7 @@ class ControlWindow:
         self.reset_btn = ttk.Button(
             buttons_frame,
             text="Resetar",
+            underline=-1,
             command=self._reset_timer
         )
         self.reset_btn.pack(side="left", padx=(0, 5))
@@ -198,6 +201,7 @@ class ControlWindow:
         self.format_btn = ttk.Button(
             control_frame,
             text="Formatar",
+            underline=-1,
             command=self._open_format_modal
         )
         self.format_btn.pack(fill="x", pady=(10, 0))
@@ -211,6 +215,7 @@ class ControlWindow:
         self.project_check = ttk.Checkbutton(
             options_frame,
             text="Projetar/Ocultar",
+            underline=-1,
             variable=self.project_var,
             command=self._toggle_projection
         )
@@ -230,6 +235,7 @@ class ControlWindow:
         self.center_btn = ttk.Button(
             options_frame,
             text="Centralizar Inferior Direito",
+            underline=-1,
             command=self._center_bottom_right
         )
         self.center_btn.pack(anchor="w", pady=(5, 0))
@@ -250,6 +256,7 @@ class ControlWindow:
         self.save_preset_btn = ttk.Button(
             preset_buttons_frame,
             text="Salvar Preset",
+            underline=-1,
             command=self._save_preset
         )
         self.save_preset_btn.pack(side="left", padx=(0, 5))
@@ -258,6 +265,7 @@ class ControlWindow:
         self.load_preset_btn = ttk.Button(
             preset_buttons_frame,
             text="Carregar Preset",
+            underline=-1,
             command=self._load_preset
         )
         self.load_preset_btn.pack(side="left", padx=(0, 5))
@@ -349,6 +357,68 @@ class ControlWindow:
         
         # Centralizar inferior direito: Ctrl+Shift+Baixo
         self.window.bind("<Control-Shift-Down>", on_center_bottom_right)
+        
+        # --- Modo de Access Keys (estilo Alt menu) ---
+        self._access_key_mode = False
+        self._access_key_widgets = [
+            (self.start_btn,       0),   # I → Iniciar
+            (self.pause_btn,       0),   # P → Pausar
+            (self.reset_btn,       0),   # R → Resetar
+            (self.format_btn,      0),   # F → Formatar
+            (self.project_check,   9),   # O → Pr/Ocultar
+            (self.center_btn,      22),  # D → ...Direito
+            (self.save_preset_btn, 0),   # S → Salvar preset
+            (self.load_preset_btn, 0),   # C → Carregar preset
+        ]
+        self._access_key_map = {
+            'i': on_start,
+            'p': lambda e: (self._pause_timer(), "break")[1],
+            'r': on_reset,
+            'f': on_format,
+            'o': on_project,
+            'd': on_center_bottom_right,
+            's': on_save_preset,
+            'c': on_load_preset,
+        }
+
+        def enter_access_key_mode(event):
+            if self._access_key_mode:
+                _exit_access_key_mode()
+                return "break"
+            self._access_key_mode = True
+            for widget, idx in self._access_key_widgets:
+                widget.config(underline=idx)
+            return "break"
+
+        def _exit_access_key_mode():
+            self._access_key_mode = False
+            for widget, _ in self._access_key_widgets:
+                widget.config(underline=-1)
+
+        def on_access_key_press(event):
+            if not self._access_key_mode:
+                return
+            # Ignorar modificadores sozinhos (Alt, Ctrl, Shift, etc.)
+            if event.keysym in ('Alt_L', 'Alt_R', 'Control_L', 'Control_R',
+                                 'Shift_L', 'Shift_R', 'Super_L', 'Super_R'):
+                return
+            key = event.keysym.lower()
+            _exit_access_key_mode()
+            if key in self._access_key_map:
+                self._access_key_map[key](event)
+            return "break"
+
+        def on_escape(event):
+            if self._access_key_mode:
+                _exit_access_key_mode()
+                return "break"
+
+        # Ativar modo com Alt (soltura da tecla para evitar disparo duplo)
+        self.window.bind("<KeyRelease-Alt_L>", enter_access_key_mode)
+        self.window.bind("<KeyRelease-Alt_R>", enter_access_key_mode)
+        self.window.bind("<Escape>", on_escape)
+        # Capturar qualquer tecla alfanumérica quando no modo access key
+        self.window.bind("<Key>", on_access_key_press)
     
     def _setup_callbacks(self):
         """Configura os callbacks do timer logic"""
