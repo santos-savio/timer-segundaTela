@@ -23,6 +23,19 @@ class TimerWindow:
         self.is_locked = True
         self.is_visible = False
         
+        # Variáveis para redimensionamento
+        self.resize_mode = None  # None, 'left', 'right', 'top', 'bottom', 'corner'
+        self.start_x = 0
+        self.start_y = 0
+        self.start_width = 0
+        self.start_height = 0
+        self.initial_x = 0  # Posição inicial da janela
+        self.initial_y = 0
+        
+        # Dimensões da tela para limites
+        self.screen_width = self.window.winfo_screenwidth()
+        self.screen_height = self.window.winfo_screenheight()
+        
         # Configurar janela sem bordas
         self._setup_window()
         
@@ -39,10 +52,6 @@ class TimerWindow:
         
         # Bindings para movimentação e redimensionamento
         self._setup_bindings()
-        
-        # Variáveis para drag
-        self.start_x = 0
-        self.start_y = 0
     
     def _setup_window(self):
         """Configura a janela sem bordas"""
@@ -81,19 +90,136 @@ class TimerWindow:
     def _on_click(self, event):
         """Evento ao clicar na janela"""
         if not self.is_locked:
-            self.start_x = event.x_root - self.window.winfo_x()
-            self.start_y = event.y_root - self.window.winfo_y()
+            self.start_x = event.x_root
+            self.start_y = event.y_root
+            self.start_width = self.window.winfo_width()
+            self.start_height = self.window.winfo_height()
+            # Armazenar posição inicial correta da janela
+            self.initial_x = self.window.winfo_x()
+            self.initial_y = self.window.winfo_y()
+            
+            # Determinar modo de redimensionamento
+            width = self.start_width
+            height = self.start_height
+            edge_threshold = 10
+            
+            # Detectar borda
+            on_left = event.x < edge_threshold
+            on_right = event.x > width - edge_threshold
+            on_top = event.y < edge_threshold
+            on_bottom = event.y > height - edge_threshold
+            
+            # Determinar tipo de redimensionamento
+            if on_left and on_top:
+                self.resize_mode = 'top_left'
+            elif on_right and on_top:
+                self.resize_mode = 'top_right'
+            elif on_left and on_bottom:
+                self.resize_mode = 'bottom_left'
+            elif on_right and on_bottom:
+                self.resize_mode = 'bottom_right'
+            elif on_left:
+                self.resize_mode = 'left'
+            elif on_right:
+                self.resize_mode = 'right'
+            elif on_top:
+                self.resize_mode = 'top'
+            elif on_bottom:
+                self.resize_mode = 'bottom'
+            else:
+                self.resize_mode = None  # Modo de movimentação
     
     def _on_drag(self, event):
         """Evento ao arrastar a janela"""
         if not self.is_locked:
-            x = event.x_root - self.start_x
-            y = event.y_root - self.start_y
-            self.window.geometry(f"+{x}+{y}")
+            if self.resize_mode is None:
+                # Movimentação normal usando delta
+                dx = event.x_root - self.start_x
+                dy = event.y_root - self.start_y
+                new_x = self.initial_x + dx
+                new_y = self.initial_y + dy
+                
+                # Aplicar limites de tela
+                new_x, new_y = self._constrain_position(new_x, new_y)
+                
+                self.window.geometry(f"+{new_x}+{new_y}")
+            else:
+                # Redimensionamento
+                self._handle_resize(event)
+    
+    def _handle_resize(self, event):
+        """Lida com o redimensionamento da janela"""
+        dx = event.x_root - self.start_x
+        dy = event.y_root - self.start_y
+        
+        # Valores iniciais
+        x = self.initial_x
+        y = self.initial_y
+        width = self.start_width
+        height = self.start_height
+        min_size = 200
+        max_width = int(self.screen_width * 0.9)
+        max_height = int(self.screen_height * 0.9)
+        
+        # Redimensionamento mantendo borda oposta fixa
+        if self.resize_mode == 'left':
+            new_width = max(min_size, min(max_width, width - dx))
+            x = x + (width - new_width)  # Move borda esquerda
+            width = new_width
+        elif self.resize_mode == 'right':
+            width = max(min_size, min(max_width, width + dx))
+            # X permanece o mesmo (borda esquerda fixa)
+        elif self.resize_mode == 'top':
+            new_height = max(min_size, min(max_height, height - dy))
+            y = y + (height - new_height)  # Move borda superior
+            height = new_height
+        elif self.resize_mode == 'bottom':
+            height = max(min_size, min(max_height, height + dy))
+            # Y permanece o mesmo (borda superior fixa)
+        elif self.resize_mode == 'top_left':
+            new_width = max(min_size, min(max_width, width - dx))
+            new_height = max(min_size, min(max_height, height - dy))
+            x = x + (width - new_width)
+            y = y + (height - new_height)
+            width = new_width
+            height = new_height
+        elif self.resize_mode == 'top_right':
+            new_width = max(min_size, min(max_width, width + dx))
+            new_height = max(min_size, min(max_height, height - dy))
+            y = y + (height - new_height)
+            width = new_width
+            height = new_height
+        elif self.resize_mode == 'bottom_left':
+            new_width = max(min_size, min(max_width, width - dx))
+            new_height = max(min_size, min(max_height, height + dy))
+            x = x + (width - new_width)
+            width = new_width
+            height = new_height
+        elif self.resize_mode == 'bottom_right':
+            width = max(min_size, min(max_width, width + dx))
+            height = max(min_size, min(max_height, height + dy))
+        
+        # Aplicar limites de posição
+        x, y = self._constrain_position(x, y)
+        
+        self.window.geometry(f"{width}x{height}+{x}+{y}")
     
     def _on_release(self, event):
         """Evento ao soltar o mouse"""
-        pass
+        self.resize_mode = None
+    
+    def _constrain_position(self, x, y):
+        """Restringe a posição da janela dentro dos limites da tela"""
+        width = self.window.winfo_width()
+        height = self.window.winfo_height()
+        
+        # Limitar posição X
+        x = max(0, min(x, self.screen_width - width))
+        
+        # Limitar posição Y (considerando barra de tarefas)
+        y = max(0, min(y, self.screen_height - height))
+        
+        return x, y
     
     def _on_motion(self, event):
         """Evento ao mover o mouse (para cursor de redimensionamento)"""
@@ -101,12 +227,30 @@ class TimerWindow:
             # Detectar se está na borda para mudar cursor
             width = self.window.winfo_width()
             height = self.window.winfo_height()
+            edge_threshold = 10
             
-            on_edge = (event.x < 10 or event.x > width - 10 or 
-                      event.y < 10 or event.y > height - 10)
+            on_left = event.x < edge_threshold
+            on_right = event.x > width - edge_threshold
+            on_top = event.y < edge_threshold
+            on_bottom = event.y > height - edge_threshold
             
-            if on_edge:
-                self.window.config(cursor="sizing")
+            # Definir cursor apropriado
+            if on_left and on_top:
+                self.window.config(cursor="top_left_corner")
+            elif on_right and on_top:
+                self.window.config(cursor="top_right_corner")
+            elif on_left and on_bottom:
+                self.window.config(cursor="bottom_left_corner")
+            elif on_right and on_bottom:
+                self.window.config(cursor="bottom_right_corner")
+            elif on_left:
+                self.window.config(cursor="sb_h_double_arrow")
+            elif on_right:
+                self.window.config(cursor="sb_h_double_arrow")
+            elif on_top:
+                self.window.config(cursor="sb_v_double_arrow")
+            elif on_bottom:
+                self.window.config(cursor="sb_v_double_arrow")
             else:
                 self.window.config(cursor="fleur")
         else:
