@@ -23,7 +23,7 @@ class ControlWindow:
         # Criar janela principal
         self.window = tk.Tk()
         self.window.title("Timer Control")
-        self.window.geometry("400x600")
+        self.window.geometry("400x640")
         self.window.resizable(False, False)
         
         # Criar interface
@@ -92,7 +92,7 @@ class ControlWindow:
         
         # Minutos
         ttk.Label(time_input_frame, text="M:").grid(row=0, column=2, padx=2)
-        self.minutes_var = tk.IntVar(value=0)
+        self.minutes_var = tk.IntVar(value=1)
         self.minutes_spin = ttk.Spinbox(
             time_input_frame,
             from_=0,
@@ -115,6 +115,14 @@ class ControlWindow:
             command=self._on_time_change
         )
         self.seconds_spin.grid(row=0, column=5, padx=2)
+        
+        # Botão Atualizar tempo
+        update_time_btn = ttk.Button(
+            time_frame,
+            text="Atualizar tempo",
+            command=self._force_time_update
+        )
+        update_time_btn.pack(pady=(10, 0))
         
         # Modo do timer
         mode_frame = ttk.LabelFrame(main_frame, text="Modo", padding="10")
@@ -244,6 +252,17 @@ class ControlWindow:
         self.timer_logic.set_time(hours, minutes, seconds)
         # Forçar atualização do preview
         self._on_timer_update(self.timer_logic.format_time())
+    
+    def _force_time_update(self):
+        """Força atualização imediata do tempo no preview e timer principal"""
+        hours = self.hours_var.get()
+        minutes = self.minutes_var.get()
+        seconds = self.seconds_var.get()
+        # Atualiza o tempo inicial no TimerLogic
+        self.timer_logic.set_time(hours, minutes, seconds)
+        # Força atualização imediata independente do estado do timer
+        current_time_str = self.timer_logic.format_time()
+        self._on_timer_update(current_time_str)
     
     def _on_mode_change(self):
         """Callback para mudança no modo"""
