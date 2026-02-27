@@ -17,7 +17,9 @@ class TimerWindow:
         self.bg_color = "#000000"  # Preto
         self.fg_color = "#FFFFFF"  # Branco
         self.font_family = "Arial"
-        self.font_size = 120
+        # Calcular tamanho inicial da fonte baseado no tamanho padrão da janela
+        initial_window_height = 400
+        self.font_size = max(20, min(initial_window_height // 3, 120))  # Baseado no cálculo do _on_configure
         
         # Estado da janela
         self.is_locked = True
@@ -260,7 +262,7 @@ class TimerWindow:
         """Evento ao redimensionar a janela"""
         # Ajustar tamanho da fonte proporcionalmente ao tamanho da janela
         if not self.is_locked:
-            new_size = max(20, min(event.height // 3, 200))
+            new_size = max(20, min(event.height // 3, 120))  # Limite máximo de 120pt
             if new_size != self.font_size:
                 self.font_size = new_size
                 self._update_font()
