@@ -12,12 +12,15 @@ Aplicativo desktop em Python com interface gráfica para exibir um timer em jane
 - **Controle de posição**: Opção de travar/destravar movimentação e redimensionamento
 - **Always on top**: Janela de exibição permanece acima das outras quando travada
 
-## Requisitos
+## Instalação e Uso
 
-- Python 3.x
-- Tkinter (incluído por padrão na instalação Python)
+### Opção 1: Versão Compilada (Recomendado)
 
-## Instalação
+1. Acesse a página de releases: https://github.com/santos-savio/timer-segundaTela/releases
+2. Baixe o arquivo executável mais recente (`.exe` para Windows)
+3. Execute o arquivo baixado - não é necessário instalar Python
+
+### Opção 2: Código Fonte
 
 1. Clone ou baixe os arquivos do projeto
 2. Navegue até o diretório do projeto
@@ -26,6 +29,11 @@ Aplicativo desktop em Python com interface gráfica para exibir um timer em jane
 ```bash
 python main.py
 ```
+
+### Requisitos (Apenas para código fonte)
+
+- Python 3.x
+- Tkinter (incluído por padrão na instalação Python)
 
 ## Uso
 
@@ -54,6 +62,30 @@ python main.py
 
 - **Projetar/Ocultar**: Mostra ou esconde a janela do timer
 - **Ajustar posição e tamanho**: Permite mover e redimensionar a janela do timer
+- **Centralizar Inferior Direito**: Posiciona a janela no canto inferior direito da tela
+
+### Presets
+
+- **Salvar Preset**: Salva as configurações atuais (tempo, modo, formatação, posição e tamanho)
+- **Carregar Preset**: Carrega um preset previamente salvo
+- **Atalhos**: 
+  - `Ctrl+S`: Salvar preset
+  - `Ctrl+C`: Carregar preset
+
+### Atalhos de Teclado
+
+- **H**: Focar campo de horas
+- **M**: Focar campo de minutos  
+- **S**: Focar campo de segundos
+- **Espaço**: Iniciar/Pausar timer
+- **Ctrl+I**: Iniciar timer
+- **Ctrl+R**: Resetar timer
+- **Ctrl+F**: Abrir formatação
+- **Ctrl+P**: Projetar/Ocultar
+- **Ctrl+S**: Salvar preset
+- **Ctrl+C**: Carregar preset
+- **Ctrl+Shift+Seta Baixo**: Centralizar inferior direito
+- **Alt + tecla**: Modo de acesso rápido (pressione Alt e solte, depois digite a tecla de acesso)
 
 ### Janela do Timer
 
