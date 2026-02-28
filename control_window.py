@@ -506,7 +506,8 @@ class ControlWindow:
             fmt = self.current_format
             try:
                 self.timer_window.update_formatting(
-                    fmt["bg_color"], fmt["fg_color"], fmt["font_family"], fmt["font_size"]
+                    fmt["bg_color"], fmt["fg_color"], fmt["font_family"], fmt["font_size"],
+                    fmt.get("transparent", False)
                 )
             except Exception:
                 pass
