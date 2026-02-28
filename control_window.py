@@ -9,6 +9,7 @@ from format_modal import FormatModal
 import os
 import csv
 from datetime import datetime
+import re
 
 class ControlWindow:
     def __init__(self, timer_logic, timer_window=None):
@@ -27,7 +28,7 @@ class ControlWindow:
         # Criar janela principal
         self.window = tk.Tk()
         self.window.title("Timer Control")
-        self.window.geometry("900x660")
+        self.window.geometry("780x590")
         self.window.resizable(False, False)
         
         # Criar interface
@@ -62,11 +63,15 @@ class ControlWindow:
         main_frame = ttk.Frame(self.window, padding="20")
         main_frame.pack(fill="both", expand=True)
         
-        # Preview do timer
-        preview_frame = ttk.LabelFrame(main_frame, text="Preview", padding="10")
-        preview_frame.pack(pady=(0, 10))
+        # Container horizontal para preview e mapa de posição
+        top_container = ttk.Frame(main_frame)
+        top_container.pack(fill="x", pady=(0, 10))
 
-        _preview_w = 480
+        # Preview do timer
+        preview_frame = ttk.LabelFrame(top_container, text="Preview", padding="10")
+        preview_frame.grid(row=0, column=0, sticky="nw", padx=(0, 5))
+
+        _preview_w = 336
         _preview_h = int(_preview_w * 9 / 16)
 
         self.preview_canvas = tk.Canvas(
@@ -82,9 +87,15 @@ class ControlWindow:
             _preview_w // 2,
             _preview_h // 2,
             text="00:00",
-            font=(self.current_format["font_family"], 48),
+            font=(self.current_format["font_family"], 34),
             fill=self.current_format["fg_color"]
         )
+
+        # Mapa de posição do timer
+        self._create_position_map(top_container, _preview_h)
+
+        # Iniciar polling do mapa de posição
+        self._refresh_position_map()
 
         # Container horizontal para tempo e modo
         time_mode_container = ttk.Frame(main_frame)
@@ -531,6 +542,7 @@ class ControlWindow:
         is_locked = not self.adjust_var.get()
         if self.timer_window is not None:
             self.timer_window.set_locked(is_locked)
+        self._update_map_interaction()
     
     def _center_bottom_right(self):
         """Centraliza a janela do timer na posição inferior direita da tela"""
@@ -557,6 +569,284 @@ class ControlWindow:
                 # Opcional: esconder após 2 segundos se não estiver projetado
                 # self.window.after(2000, lambda: self.timer_window.hide() if not self.is_projected else None)
     
+    def _create_position_map(self, parent, height):
+        """Cria o canvas do mapa de posicionamento do timer"""
+        map_frame = ttk.LabelFrame(parent, text="Posição", padding="10")
+        map_frame.grid(row=0, column=1, sticky="nw", padx=(5, 0))
+
+        # Detectar resolução da tela destino
+        self._map_screen_w = self.window.winfo_screenwidth()
+        self._map_screen_h = self.window.winfo_screenheight()
+
+        # Dimensões do canvas proporcional à tela (mesma altura do preview)
+        self._map_canvas_h = height
+        self._map_canvas_w = int(height * self._map_screen_w / self._map_screen_h)
+
+        self.map_canvas = tk.Canvas(
+            map_frame,
+            width=self._map_canvas_w,
+            height=self._map_canvas_h,
+            bg="#1a1a2e",
+            highlightthickness=1,
+            highlightbackground="#444"
+        )
+        self.map_canvas.pack()
+
+        # Retângulo representando o timer
+        self._map_rect = self.map_canvas.create_rectangle(
+            0, 0, 60, 30,
+            outline="#4fc3f7",
+            fill="#0d47a1",
+            width=2
+        )
+
+        # Label de coordenadas
+        self._map_coord_text = self.map_canvas.create_text(
+            self._map_canvas_w // 2,
+            self._map_canvas_h - 8,
+            text="",
+            fill="#aaa",
+            font=("Arial", 7)
+        )
+
+        # Cache da geometria real do timer (válido mesmo quando oculto)
+        self._timer_geom = {'x': 0, 'y': 0, 'w': 800, 'h': 400}
+
+        # Estado do drag/resize
+        self._map_drag_start_x = 0
+        self._map_drag_start_y = 0
+        self._map_drag_rect_x1 = 0
+        self._map_drag_rect_y1 = 0
+        self._map_drag_rect_x2 = 0
+        self._map_drag_rect_y2 = 0
+        self._map_dragging = False
+        self._map_resize_mode = None  # None = move, ou 'n','s','e','w','ne','nw','se','sw'
+
+    def _get_timer_geometry_snapshot(self):
+        """Retorna geometria do timer (incluindo janela oculta) em dict {x,y,w,h}."""
+        if self.timer_window is None:
+            return self._timer_geom
+
+        tw = self.timer_window.window
+        # Quando oculto (withdrawn), usamos o cache para não sobrescrever o formato
+        # recém-definido no preview com geometria antiga.
+        try:
+            if tw.state() == 'withdrawn':
+                return self._timer_geom
+        except Exception:
+            pass
+
+        try:
+            geometry = tw.geometry()
+            # Ex.: "800x400+100+200" ou "800x400-1920+100"
+            match = re.match(r"^(\d+)x(\d+)([+-]\d+)([+-]\d+)$", geometry)
+            if match:
+                return {
+                    'w': int(match.group(1)),
+                    'h': int(match.group(2)),
+                    'x': int(match.group(3)),
+                    'y': int(match.group(4)),
+                }
+        except Exception:
+            pass
+
+        # Fallback para casos inesperados de parse
+        try:
+            tw.update_idletasks()
+            w = tw.winfo_width()
+            h = tw.winfo_height()
+            if w > 1:
+                return {'x': tw.winfo_x(), 'y': tw.winfo_y(), 'w': w, 'h': h}
+        except Exception:
+            pass
+
+        return self._timer_geom
+
+    def _refresh_position_map(self):
+        """Atualiza o mapa de posição com a geometria atual do timer"""
+        # Não atualiza enquanto o usuário está interagindo (evita salto ao arrastar)
+        if not getattr(self, '_map_dragging', False):
+            try:
+                if self.timer_window is not None and hasattr(self, 'map_canvas'):
+                    g = self._get_timer_geometry_snapshot()
+                    self._timer_geom = g
+
+                    sx = self._map_canvas_w / self._map_screen_w
+                    sy = self._map_canvas_h / self._map_screen_h
+
+                    rx1 = int(g['x'] * sx)
+                    ry1 = int(g['y'] * sy)
+                    rx2 = int((g['x'] + g['w']) * sx)
+                    ry2 = int((g['y'] + g['h']) * sy)
+
+                    self.map_canvas.coords(self._map_rect, rx1, ry1, rx2, ry2)
+                    self.map_canvas.itemconfig(
+                        self._map_coord_text,
+                        text=f"{g['x']},{g['y']}  {g['w']}×{g['h']}"
+                    )
+            except Exception:
+                pass
+        self.window.after(200, self._refresh_position_map)
+
+    def _update_map_interaction(self):
+        """Liga ou desliga os bindings de drag/resize no mapa conforme o estado de ajuste"""
+        if not hasattr(self, 'map_canvas'):
+            return
+        if self.adjust_var.get():
+            self.map_canvas.bind("<Button-1>", self._on_map_drag_start)
+            self.map_canvas.bind("<B1-Motion>", self._on_map_drag)
+            self.map_canvas.bind("<ButtonRelease-1>", self._on_map_drag_end)
+            self.map_canvas.bind("<Motion>", self._on_map_motion)
+        else:
+            self.map_canvas.unbind("<Button-1>")
+            self.map_canvas.unbind("<B1-Motion>")
+            self.map_canvas.unbind("<ButtonRelease-1>")
+            self.map_canvas.unbind("<Motion>")
+            self.map_canvas.config(cursor="arrow")
+
+    def _map_get_resize_mode(self, event, rx1, ry1, rx2, ry2):
+        """Detecta o modo de resize/move com base na posição do cursor no retângulo"""
+        edge = max(5, int(min(rx2 - rx1, ry2 - ry1) * 0.2))
+        on_n = ry1 <= event.y <= ry1 + edge
+        on_s = ry2 - edge <= event.y <= ry2
+        on_w = rx1 <= event.x <= rx1 + edge
+        on_e = rx2 - edge <= event.x <= rx2
+        if on_n and on_w: return 'nw'
+        if on_n and on_e: return 'ne'
+        if on_s and on_w: return 'sw'
+        if on_s and on_e: return 'se'
+        if on_n: return 'n'
+        if on_s: return 's'
+        if on_w: return 'w'
+        if on_e: return 'e'
+        return None  # interior = mover
+
+    def _on_map_motion(self, event):
+        """Atualiza o cursor conforme a posição sobre o retângulo"""
+        coords = self.map_canvas.coords(self._map_rect)
+        if not coords:
+            self.map_canvas.config(cursor="arrow")
+            return
+        rx1, ry1, rx2, ry2 = coords
+        if not (rx1 <= event.x <= rx2 and ry1 <= event.y <= ry2):
+            self.map_canvas.config(cursor="arrow")
+            return
+        mode = self._map_get_resize_mode(event, rx1, ry1, rx2, ry2)
+        cursor_map = {
+            'nw': 'top_left_corner', 'ne': 'top_right_corner',
+            'sw': 'bottom_left_corner', 'se': 'bottom_right_corner',
+            'n': 'sb_v_double_arrow', 's': 'sb_v_double_arrow',
+            'w': 'sb_h_double_arrow', 'e': 'sb_h_double_arrow',
+            None: 'fleur'
+        }
+        self.map_canvas.config(cursor=cursor_map.get(mode, 'fleur'))
+
+    def _on_map_drag_start(self, event):
+        """Inicia o drag ou resize do retângulo no mapa"""
+        coords = self.map_canvas.coords(self._map_rect)
+        if not coords:
+            return
+        rx1, ry1, rx2, ry2 = coords
+        if not (rx1 <= event.x <= rx2 and ry1 <= event.y <= ry2):
+            self._map_dragging = False
+            return
+        self._map_drag_start_x = event.x
+        self._map_drag_start_y = event.y
+        self._map_drag_rect_x1 = rx1
+        self._map_drag_rect_y1 = ry1
+        self._map_drag_rect_x2 = rx2
+        self._map_drag_rect_y2 = ry2
+        self._map_resize_mode = self._map_get_resize_mode(event, rx1, ry1, rx2, ry2)
+        self._map_dragging = True
+
+    def _on_map_drag(self, event):
+        """Move ou redimensiona o retângulo enquanto arrasta"""
+        if not self._map_dragging:
+            return
+        dx = event.x - self._map_drag_start_x
+        dy = event.y - self._map_drag_start_y
+        x1 = self._map_drag_rect_x1
+        y1 = self._map_drag_rect_y1
+        x2 = self._map_drag_rect_x2
+        y2 = self._map_drag_rect_y2
+        # Limites mínimos coerentes com TimerWindow (_handle_resize usa 200px)
+        screen_per_canvas_x = self._map_screen_w / self._map_canvas_w
+        screen_per_canvas_y = self._map_screen_h / self._map_canvas_h
+        min_w_map = max(8, int(200 / screen_per_canvas_x))
+        min_h_map = max(8, int(200 / screen_per_canvas_y))
+        mode = self._map_resize_mode
+
+        if mode is None:  # mover
+            x1 += dx; x2 += dx
+            y1 += dy; y2 += dy
+        elif mode == 'n':
+            y1 = min(y1 + dy, y2 - min_h_map)
+        elif mode == 's':
+            y2 = max(y2 + dy, y1 + min_h_map)
+        elif mode == 'w':
+            x1 = min(x1 + dx, x2 - min_w_map)
+        elif mode == 'e':
+            x2 = max(x2 + dx, x1 + min_w_map)
+        elif mode == 'nw':
+            x1 = min(x1 + dx, x2 - min_w_map)
+            y1 = min(y1 + dy, y2 - min_h_map)
+        elif mode == 'ne':
+            x2 = max(x2 + dx, x1 + min_w_map)
+            y1 = min(y1 + dy, y2 - min_h_map)
+        elif mode == 'sw':
+            x1 = min(x1 + dx, x2 - min_w_map)
+            y2 = max(y2 + dy, y1 + min_h_map)
+        elif mode == 'se':
+            x2 = max(x2 + dx, x1 + min_w_map)
+            y2 = max(y2 + dy, y1 + min_h_map)
+
+        self.map_canvas.coords(self._map_rect, x1, y1, x2, y2)
+
+        sx = self._map_screen_w / self._map_canvas_w
+        sy = self._map_screen_h / self._map_canvas_h
+        real_x = int(x1 * sx)
+        real_y = int(y1 * sy)
+        real_w = int((x2 - x1) * sx)
+        real_h = int((y2 - y1) * sy)
+        self.map_canvas.itemconfig(
+            self._map_coord_text,
+            text=f"{real_x},{real_y}  {real_w}×{real_h}"
+        )
+
+    def _on_map_drag_end(self, event):
+        """Aplica posição e tamanho ao timer_window ao soltar"""
+        if not self._map_dragging:
+            return
+        self._map_dragging = False
+        if self.timer_window is None:
+            return
+        coords = self.map_canvas.coords(self._map_rect)
+        if not coords:
+            return
+        rx1, ry1, rx2, ry2 = coords
+        sx = self._map_screen_w / self._map_canvas_w
+        sy = self._map_screen_h / self._map_canvas_h
+        real_x = int(rx1 * sx)
+        real_y = int(ry1 * sy)
+        raw_w = max(1, int((rx2 - rx1) * sx))
+        raw_h = max(1, int((ry2 - ry1) * sy))
+
+        # Respeitar tamanho mínimo e preservar proporção do retângulo ajustado
+        min_size = 200
+        ratio = raw_w / raw_h
+        real_w = raw_w
+        real_h = raw_h
+        if real_w < min_size or real_h < min_size:
+            if ratio >= 1:
+                real_w = max(real_w, min_size)
+                real_h = max(min_size, int(real_w / ratio))
+            else:
+                real_h = max(real_h, min_size)
+                real_w = max(min_size, int(real_h * ratio))
+
+        self._timer_geom = {'x': real_x, 'y': real_y, 'w': real_w, 'h': real_h}
+        self.timer_window.window.geometry(f"{real_w}x{real_h}+{real_x}+{real_y}")
+
     def _open_format_modal(self):
         """Abre o modal de formatação"""
         modal = FormatModal(
@@ -578,14 +868,14 @@ class ControlWindow:
             self.preview_canvas.itemconfig(
                 self.preview_label,
                 fill=new_format["fg_color"],
-                font=(new_format["font_family"], 48)
+                font=(new_format["font_family"], 34)
             )
         except:
             self.preview_canvas.config(bg=bg_color)
             self.preview_canvas.itemconfig(
                 self.preview_label,
                 fill=new_format["fg_color"],
-                font=("Arial", 48)
+                font=("Arial", 34)
             )
         
         # Atualizar janela do timer
