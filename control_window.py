@@ -27,7 +27,7 @@ class ControlWindow:
         # Criar janela principal
         self.window = tk.Tk()
         self.window.title("Timer Control")
-        self.window.geometry("550x550")
+        self.window.geometry("900x660")
         self.window.resizable(False, False)
         
         # Criar interface
@@ -64,17 +64,27 @@ class ControlWindow:
         
         # Preview do timer
         preview_frame = ttk.LabelFrame(main_frame, text="Preview", padding="10")
-        preview_frame.pack(fill="x", pady=(0, 10))
-        
-        self.preview_label = tk.Label(
+        preview_frame.pack(pady=(0, 10))
+
+        _preview_w = 480
+        _preview_h = int(_preview_w * 9 / 16)
+
+        self.preview_canvas = tk.Canvas(
             preview_frame,
+            width=_preview_w,
+            height=_preview_h,
+            bg=self.current_format["bg_color"],
+            highlightthickness=0
+        )
+        self.preview_canvas.pack()
+
+        self.preview_label = self.preview_canvas.create_text(
+            _preview_w // 2,
+            _preview_h // 2,
             text="00:00",
             font=(self.current_format["font_family"], 48),
-            bg=self.current_format["bg_color"],
-            fg=self.current_format["fg_color"],
-            height=2
+            fill=self.current_format["fg_color"]
         )
-        self.preview_label.pack(fill="x")
 
         # Container horizontal para tempo e modo
         time_mode_container = ttk.Frame(main_frame)
@@ -439,7 +449,7 @@ class ControlWindow:
     def _on_timer_update(self, time_str: str):
         """Callback para atualização do timer"""
         # Atualizar preview
-        self.preview_label.config(text=time_str)
+        self.preview_canvas.itemconfig(self.preview_label, text=time_str)
         
         # Atualizar janela do timer se estiver visível
         if self.is_projected and self.timer_window is not None:
@@ -564,15 +574,17 @@ class ControlWindow:
         
         # Atualizar preview
         try:
-            self.preview_label.config(
-                bg=bg_color,
-                fg=new_format["fg_color"],
+            self.preview_canvas.config(bg=bg_color)
+            self.preview_canvas.itemconfig(
+                self.preview_label,
+                fill=new_format["fg_color"],
                 font=(new_format["font_family"], 48)
             )
         except:
-            self.preview_label.config(
-                bg=bg_color,
-                fg=new_format["fg_color"],
+            self.preview_canvas.config(bg=bg_color)
+            self.preview_canvas.itemconfig(
+                self.preview_label,
+                fill=new_format["fg_color"],
                 font=("Arial", 48)
             )
         
