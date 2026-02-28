@@ -25,6 +25,7 @@ class TimerWindow:
         self.is_locked = True
         self.is_visible = False
         self._font_manually_set = False
+        self.transparent = False
         
         # Variáveis para redimensionamento
         self.resize_mode = None  # None, 'left', 'right', 'top', 'bottom', 'corner'
@@ -276,6 +277,7 @@ class TimerWindow:
         self.font_family = font_family
         self.font_size = font_size
         self._font_manually_set = True
+        self.transparent = transparent
 
         # Configurar transparência usando a cor de fundo escolhida como chave
         if transparent:
@@ -311,6 +313,14 @@ class TimerWindow:
         self.window.deiconify()
         self.window.lift()
         self.is_visible = True
+        
+        # Reaplicar transparência se necessário (para garantir efeito na primeira exibição)
+        if self.transparent:
+            try:
+                self.window.attributes('-transparentcolor', self.bg_color)
+                self.window.configure(bg=self.bg_color)
+            except Exception:
+                pass
     
     def hide(self):
         """Esconde a janela do timer"""
