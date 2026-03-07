@@ -10,6 +10,10 @@ import os
 import csv
 from datetime import datetime
 import re
+try:
+    from screeninfo import get_monitors
+except ImportError:
+    get_monitors = None  # Fallback para caso screeninfo não esteja instalado
 
 class ControlWindow:
     def __init__(self, timer_logic, timer_window=None):
@@ -28,7 +32,7 @@ class ControlWindow:
         # Criar janela principal
         self.window = tk.Tk()
         self.window.title("Timer Control")
-        self.window.geometry("780x590")
+        self.window.geometry("780x650")
         self.window.resizable(False, False)
         
         # Criar interface
@@ -265,9 +269,13 @@ class ControlWindow:
         control_options_container.grid_columnconfigure(0, weight=7)
         control_options_container.grid_columnconfigure(1, weight=3)
         
+        # Container horizontal para presets e monitores
+        presets_monitors_container = ttk.Frame(main_frame)
+        presets_monitors_container.pack(fill="x", pady=(0, 10))
+        
         # Frame de presets
-        presets_frame = ttk.LabelFrame(main_frame, text="Presets", padding="10")
-        presets_frame.pack(fill="x", pady=(0, 10))
+        presets_frame = ttk.LabelFrame(presets_monitors_container, text="Presets", padding="10")
+        presets_frame.grid(row=0, column=0, sticky="ew", padx=(0, 5))
         
         # Frame dos botões de presets
         preset_buttons_frame = ttk.Frame(presets_frame)
@@ -290,6 +298,34 @@ class ControlWindow:
             command=self._load_preset
         )
         self.load_preset_btn.pack(side="left", padx=(0, 5))
+        
+        # Frame de monitores
+        monitors_frame = ttk.LabelFrame(presets_monitors_container, text="Monitores", padding="10")
+        monitors_frame.grid(row=0, column=1, sticky="ew", padx=(5, 0))
+        
+        # Listbox de monitores
+        self.monitors_listbox = tk.Listbox(
+            monitors_frame,
+            height=3,
+            exportselection=False
+        )
+        self.monitors_listbox.pack(fill="x", pady=(0, 5))
+        
+        # Botão Identificar telas
+        self.identify_btn = ttk.Button(
+            monitors_frame,
+            text="Identificar telas",
+            underline=-1,
+            command=self._identify_screens
+        )
+        self.identify_btn.pack(fill="x")
+        
+        # Configurar pesos das colunas do container presets/monitores
+        presets_monitors_container.grid_columnconfigure(0, weight=1)
+        presets_monitors_container.grid_columnconfigure(1, weight=1)
+        
+        # Preencher listbox de monitores
+        self._populate_monitors_listbox()
     
     def _setup_shortcuts(self):
         """Configura os atalhos de teclado da janela de controle"""
@@ -611,6 +647,11 @@ class ControlWindow:
 
         # Cache da geometria real do timer (válido mesmo quando oculto)
         self._timer_geom = {'x': 0, 'y': 0, 'w': 800, 'h': 400}
+        
+        # Suporte a múltiplos monitores
+        self._monitors = self._get_monitors_list()
+        self._selected_monitor_index = 0  # Índice do monitor selecionado
+        self._identification_windows = []  # Janelas de identificação
 
         # Estado do drag/resize
         self._map_drag_start_x = 0
@@ -1183,3 +1224,165 @@ class ControlWindow:
         load_window.bind("<Escape>", lambda e: on_cancel())
         ttk.Button(buttons_frame, text="Carregar", command=on_select).pack(side="left", padx=(0, 5))
         ttk.Button(buttons_frame, text="Cancelar", command=on_cancel).pack(side="left")
+    
+    # Métodos para suporte a múltiplos monitores
+    
+    def _get_monitors_list(self):
+        """Obtém a lista de monitores disponíveis"""
+        print("\n=== DEBUG: _get_monitors_list chamada ===")
+        print(f"get_monitors disponível: {get_monitors is not None}")
+        
+        if get_monitors is None:
+            print("DEBUG: get_monitors é None - biblioteca screeninfo não disponível")
+            return []
+        try:
+            monitors = list(get_monitors())
+            print(f"DEBUG: {len(monitors)} monitor(es) detectado(s)")
+            for i, mon in enumerate(monitors):
+                print(f"  Monitor {i}: {mon}")
+            return monitors
+        except Exception as e:
+            print(f"DEBUG: Erro ao obter monitores: {e}")
+            return []
+    
+    def _populate_monitors_listbox(self):
+        """Preenche o listbox com a lista de monitores"""
+        self.monitors_listbox.delete(0, tk.END)
+        
+        if not self._monitors:
+            self.monitors_listbox.insert(tk.END, "Nenhum monitor detectado")
+            return
+        
+        for i, monitor in enumerate(self._monitors):
+            name = getattr(monitor, 'name', f'Monitor {i+1}')
+            primary = " (Principal)" if getattr(monitor, 'is_primary', False) else ""
+            resolution = f"{monitor.width}x{monitor.height}"
+            self.monitors_listbox.insert(tk.END, f"{i+1}. {name}{primary} - {resolution}")
+        
+        # Selecionar o monitor principal por padrão
+        for i, monitor in enumerate(self._monitors):
+            if getattr(monitor, 'is_primary', False):
+                self.monitors_listbox.selection_set(i)
+                self._selected_monitor_index = i
+                break
+        else:
+            if self._monitors:
+                self.monitors_listbox.selection_set(0)
+                self._selected_monitor_index = 0
+        
+        # Bind para mudança de seleção
+        self.monitors_listbox.bind('<<ListboxSelect>>', self._on_monitor_select)
+    
+    def _on_monitor_select(self, event):
+        """Callback quando um monitor é selecionado"""
+        selection = self.monitors_listbox.curselection()
+        if selection:
+            self._selected_monitor_index = selection[0]
+            # Atualizar o mapa de posição para o monitor selecionado
+            self._update_map_for_selected_monitor()
+    
+    def _update_map_for_selected_monitor(self):
+        """Atualiza o mapa de posição para o monitor selecionado"""
+        if self._selected_monitor_index >= len(self._monitors):
+            return
+        
+        monitor = self._monitors[self._selected_monitor_index]
+        self._map_screen_w = monitor.width
+        self._map_screen_h = monitor.height
+        
+        # Redimensionar o canvas se necessário
+        new_canvas_w = int(self._map_canvas_h * self._map_screen_w / self._map_screen_h)
+        if new_canvas_w != self._map_canvas_w:
+            self._map_canvas_w = new_canvas_w
+            self.map_canvas.config(width=self._map_canvas_w)
+    
+    def _identify_screens(self):
+        """Exibe janelas de identificação em cada monitor"""
+        print("\n=== DEBUG: _identify_screens chamada ===")
+        print(f"Número de monitores detectados: {len(self._monitors)}")
+        print(f"get_monitors disponível: {get_monitors is not None}")
+        
+        # Fechar janelas de identificação anteriores
+        for win in self._identification_windows:
+            try:
+                win.destroy()
+            except:
+                pass
+        self._identification_windows = []
+        
+        if not self._monitors:
+            print("DEBUG: Nenhum monitor na lista self._monitors")
+            messagebox.showinfo("Identificação", "Nenhum monitor detectado.")
+            return
+        
+        # Criar janela de identificação para cada monitor
+        for i, monitor in enumerate(self._monitors):
+            print(f"\nDEBUG: Criando janela para monitor {i+1}")
+            print(f"  - Nome: {getattr(monitor, 'name', 'N/A')}")
+            print(f"  - Posição: x={monitor.x}, y={monitor.y}")
+            print(f"  - Resolução: {monitor.width}x{monitor.height}")
+            print(f"  - Primary: {getattr(monitor, 'is_primary', False)}")
+            
+            win = tk.Toplevel(self.window)
+            win.overrideredirect(True)  # Sem bordas
+            win.attributes("-topmost", True)  # Sempre visível
+            
+            # Calcular posição central no monitor
+            center_x = monitor.x + monitor.width // 2
+            center_y = monitor.y + monitor.height // 2
+            
+            # Tamanho da janela de identificação
+            win_w, win_h = 200, 200
+            win_x = center_x - win_w // 2
+            win_y = center_y - win_h // 2
+            
+            print(f"  - Posição da janela: {win_x}+{win_y}")
+            print(f"  - Tamanho da janela: {win_w}x{win_h}")
+            
+            win.geometry(f"{win_w}x{win_h}+{win_x}+{win_y}")
+            win.configure(bg="#2196F3")
+            
+            # Número do monitor
+            label = tk.Label(
+                win,
+                text=str(i + 1),
+                font=("Arial", 72, "bold"),
+                bg="#2196F3",
+                fg="white"
+            )
+            label.pack(expand=True, fill="both")
+            
+            # Nome do monitor
+            name = getattr(monitor, 'name', f'Monitor {i+1}')
+            name_label = tk.Label(
+                win,
+                text=name,
+                font=("Arial", 10),
+                bg="#2196F3",
+                fg="white"
+            )
+            name_label.pack(pady=(0, 10))
+            
+            self._identification_windows.append(win)
+            print(f"  - Janela criada e adicionada à lista")
+        
+        print(f"\nDEBUG: Total de janelas de identificação criadas: {len(self._identification_windows)}")
+        print("DEBUG: Agendando fechamento automático em 3 segundos")
+        
+        # Fechar automaticamente após 3 segundos
+        self.window.after(3000, self._close_identification_windows)
+    
+    def _close_identification_windows(self):
+        """Fecha todas as janelas de identificação"""
+        print("\n=== DEBUG: _close_identification_windows chamada ===")
+        print(f"Número de janelas para fechar: {len(self._identification_windows)}")
+        
+        for i, win in enumerate(self._identification_windows):
+            try:
+                print(f"  - Fechando janela {i+1}")
+                win.destroy()
+            except Exception as e:
+                print(f"  - Erro ao fechar janela {i+1}: {e}")
+        
+        self._identification_windows = []
+        print("DEBUG: Todas as janelas fechadas")

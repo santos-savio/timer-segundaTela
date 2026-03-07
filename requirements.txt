@@ -1,3 +1,5 @@
 # Timer Desktop App Dependencies
 # Python 3.x with tkinter (included by default)
-# No additional packages required for basic functionality
+
+# Detecção de múltiplos monitores
+screeninfo>=0.8.1
