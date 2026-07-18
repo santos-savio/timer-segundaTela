@@ -67,36 +67,18 @@ class ControlWindow:
         main_frame = ttk.Frame(self.window, padding="20")
         main_frame.pack(fill="both", expand=True)
         
-        # Container horizontal para preview e mapa de posição
+        # Preview unificado: mostra o timer e permite posicioná-lo no monitor selecionado
         top_container = ttk.Frame(main_frame)
         top_container.pack(fill="x", pady=(0, 10))
 
-        # Preview do timer
-        preview_frame = ttk.LabelFrame(top_container, text="Preview", padding="10")
-        preview_frame.grid(row=0, column=0, sticky="nw", padx=(0, 5))
-
-        _preview_w = 336
-        _preview_h = int(_preview_w * 9 / 16)
-
-        self.preview_canvas = tk.Canvas(
-            preview_frame,
-            width=_preview_w,
-            height=_preview_h,
-            bg=self.current_format["bg_color"],
-            highlightthickness=0
+        self.preview_frame = ttk.LabelFrame(
+            top_container,
+            text="Preview / Posição",
+            padding="10"
         )
-        self.preview_canvas.pack()
+        self.preview_frame.pack(anchor="w")
 
-        self.preview_label = self.preview_canvas.create_text(
-            _preview_w // 2,
-            _preview_h // 2,
-            text="00:00",
-            font=(self.current_format["font_family"], 34),
-            fill=self.current_format["fg_color"]
-        )
-
-        # Mapa de posição do timer
-        self._create_position_map(top_container, _preview_h)
+        self._create_preview_map(self.preview_frame)
 
         # Iniciar polling do mapa de posição
         self._refresh_position_map()
@@ -311,14 +293,27 @@ class ControlWindow:
         )
         self.monitors_listbox.pack(fill="x", pady=(0, 5))
         
+        # Frame para botões de monitores
+        monitors_buttons_frame = ttk.Frame(monitors_frame)
+        monitors_buttons_frame.pack(fill="x", pady=(5, 0))
+        
         # Botão Identificar telas
         self.identify_btn = ttk.Button(
-            monitors_frame,
+            monitors_buttons_frame,
             text="Identificar telas",
             underline=-1,
             command=self._identify_screens
         )
-        self.identify_btn.pack(fill="x")
+        self.identify_btn.pack(side="left", fill="x", expand=True, padx=(0, 2))
+        
+        # Botão Aplicar ao preview
+        self.apply_monitor_btn = ttk.Button(
+            monitors_buttons_frame,
+            text="Aplicar ao preview",
+            underline=-1,
+            command=self._apply_monitor_to_preview
+        )
+        self.apply_monitor_btn.pack(side="left", fill="x", expand=True, padx=(2, 0))
         
         # Configurar pesos das colunas do container presets/monitores
         presets_monitors_container.grid_columnconfigure(0, weight=1)
@@ -326,6 +321,9 @@ class ControlWindow:
         
         # Preencher listbox de monitores
         self._populate_monitors_listbox()
+
+        # Iniciar polling de monitores (reconhece telas conectadas com o app aberto)
+        self.window.after(3000, self._poll_monitors)
     
     def _setup_shortcuts(self):
         """Configura os atalhos de teclado da janela de controle"""
@@ -569,9 +567,44 @@ class ControlWindow:
             except Exception:
                 pass
             self.timer_window.update_time(self.timer_logic.format_time())
+
+            # Re-escanear monitores para reconhecer telas conectadas após abrir o app
+            self._check_monitors_changed()
+
+            # Posicionar no monitor selecionado conforme o quadro de preview
+            self._apply_projection_geometry()
+
             self.timer_window.show()
         else:
             self.timer_window.hide()
+
+    def _apply_projection_geometry(self):
+        """Aplica ao timer a geometria definida no preview, no monitor selecionado"""
+        if self.timer_window is None:
+            return
+        if not (self._monitors and self._selected_monitor_index < len(self._monitors)):
+            return
+
+        monitor = self._monitors[self._selected_monitor_index]
+        g = self._timer_geom
+
+        # Garantir que o timer caiba dentro do monitor selecionado
+        w = min(g['w'], monitor.width)
+        h = min(g['h'], monitor.height)
+        x = max(0, min(g['x'], monitor.width - w))
+        y = max(0, min(g['y'], monitor.height - h))
+        self._timer_geom = {'x': x, 'y': y, 'w': w, 'h': h}
+
+        # A posição relativa é somada ao offset do monitor no desktop virtual
+        abs_x = monitor.x + x
+        abs_y = monitor.y + y
+
+        print(f"[Timer] Exibindo no Monitor {self._selected_monitor_index + 1} "
+              f"({monitor.width}x{monitor.height} @ {monitor.x},{monitor.y}) | "
+              f"Posição: {x},{y} (relativa) -> {abs_x},{abs_y} (absoluta) | "
+              f"Tamanho: {w}x{h}")
+
+        self.timer_window.window.geometry(f"{w}x{h}+{abs_x}+{abs_y}")
     
     def _toggle_adjust(self):
         """Alterna o ajuste de posição e tamanho"""
@@ -581,59 +614,85 @@ class ControlWindow:
         self._update_map_interaction()
     
     def _center_bottom_right(self):
-        """Centraliza a janela do timer na posição inferior direita da tela"""
-        if self.timer_window is not None:
-            # Obter dimensões da tela
-            screen_width = self.timer_window.window.winfo_screenwidth()
-            screen_height = self.timer_window.window.winfo_screenheight()
-            
-            # Obter dimensões da janela do timer
-            window_width = self.timer_window.window.winfo_width()
-            window_height = self.timer_window.window.winfo_height()
-            
-            # Calcular posição inferior direita (com margem de 20px)
-            x = screen_width - window_width - 20
-            y = screen_height - window_height - 20
-            
-            # Aplicar nova posição
-            self.timer_window.window.geometry(f"+{x}+{y}")
-            
-            # Se a janela estiver oculta, mostrar brevemente para feedback visual
-            if not self.is_projected:
-                self.timer_window.window.deiconify()
-                self.timer_window.window.lift()
-                # Opcional: esconder após 2 segundos se não estiver projetado
-                # self.window.after(2000, lambda: self.timer_window.hide() if not self.is_projected else None)
+        """Posiciona o timer no canto inferior direito do monitor selecionado"""
+        if self.timer_window is None:
+            return
+
+        if self._monitors and self._selected_monitor_index < len(self._monitors):
+            m = self._monitors[self._selected_monitor_index]
+            mon_x, mon_y, mon_w, mon_h = m.x, m.y, m.width, m.height
+        else:
+            mon_x, mon_y = 0, 0
+            mon_w = self.timer_window.window.winfo_screenwidth()
+            mon_h = self.timer_window.window.winfo_screenheight()
+
+        # Usar o cache de geometria (válido mesmo com a janela oculta)
+        g = self._timer_geom
+        w, h = g['w'], g['h']
+
+        # Posição inferior direita relativa ao monitor (com margem de 20px)
+        x = max(0, mon_w - w - 20)
+        y = max(0, mon_h - h - 20)
+        self._timer_geom = {'x': x, 'y': y, 'w': w, 'h': h}
+
+        # Aplicar posição absoluta no desktop virtual
+        self.timer_window.window.geometry(f"{w}x{h}+{mon_x + x}+{mon_y + y}")
+
+        # Se a janela estiver oculta, mostrar para feedback visual
+        if not self.is_projected:
+            self.timer_window.window.deiconify()
+            self.timer_window.window.lift()
     
-    def _create_position_map(self, parent, height):
-        """Cria o canvas do mapa de posicionamento do timer"""
-        map_frame = ttk.LabelFrame(parent, text="Posição", padding="10")
-        map_frame.grid(row=0, column=1, sticky="nw", padx=(5, 0))
+    def _create_preview_map(self, parent):
+        """Cria o canvas unificado de preview e posicionamento do timer.
 
-        # Detectar resolução da tela destino
-        self._map_screen_w = self.window.winfo_screenwidth()
-        self._map_screen_h = self.window.winfo_screenheight()
+        O canvas representa o monitor selecionado; o retângulo interno mostra o
+        timer com as cores e o texto reais, e pode ser arrastado/redimensionado
+        para posicionar a janela projetada.
+        """
+        # Suporte a múltiplos monitores
+        self._monitors = self._get_monitors_list()
+        self._selected_monitor_index = 0  # Índice do monitor selecionado
+        self._identification_windows = []  # Janelas de identificação
 
-        # Dimensões do canvas proporcional à tela (mesma altura do preview)
-        self._map_canvas_h = height
-        self._map_canvas_w = int(height * self._map_screen_w / self._map_screen_h)
+        # Resolução da tela destino (ajustada ao selecionar outro monitor)
+        if self._monitors:
+            self._map_screen_w = self._monitors[0].width
+            self._map_screen_h = self._monitors[0].height
+        else:
+            self._map_screen_w = self.window.winfo_screenwidth()
+            self._map_screen_h = self.window.winfo_screenheight()
 
-        self.map_canvas = tk.Canvas(
-            map_frame,
+        # Dimensões do canvas proporcional ao monitor
+        self._map_canvas_h = 189
+        self._map_canvas_w = int(self._map_canvas_h * self._map_screen_w / self._map_screen_h)
+
+        self.preview_canvas = tk.Canvas(
+            parent,
             width=self._map_canvas_w,
             height=self._map_canvas_h,
             bg="#1a1a2e",
             highlightthickness=1,
             highlightbackground="#444"
         )
-        self.map_canvas.pack()
+        self.preview_canvas.pack()
+        # Preview e mapa de posição compartilham o mesmo canvas
+        self.map_canvas = self.preview_canvas
 
-        # Retângulo representando o timer
+        # Retângulo representando o timer, com a cor de fundo atual
         self._map_rect = self.map_canvas.create_rectangle(
             0, 0, 60, 30,
             outline="#4fc3f7",
-            fill="#0d47a1",
+            fill=self.current_format["bg_color"],
             width=2
+        )
+
+        # Texto do timer dentro do retângulo
+        self.preview_label = self.map_canvas.create_text(
+            30, 15,
+            text="00:00",
+            font=(self.current_format["font_family"], 12),
+            fill=self.current_format["fg_color"]
         )
 
         # Label de coordenadas
@@ -645,13 +704,9 @@ class ControlWindow:
             font=("Arial", 7)
         )
 
-        # Cache da geometria real do timer (válido mesmo quando oculto)
+        # Cache da geometria do timer relativa ao monitor selecionado
+        # (válido mesmo quando oculto)
         self._timer_geom = {'x': 0, 'y': 0, 'w': 800, 'h': 400}
-        
-        # Suporte a múltiplos monitores
-        self._monitors = self._get_monitors_list()
-        self._selected_monitor_index = 0  # Índice do monitor selecionado
-        self._identification_windows = []  # Janelas de identificação
 
         # Estado do drag/resize
         self._map_drag_start_x = 0
@@ -663,19 +718,19 @@ class ControlWindow:
         self._map_dragging = False
         self._map_resize_mode = None  # None = move, ou 'n','s','e','w','ne','nw','se','sw'
 
-    def _get_timer_geometry_snapshot(self):
-        """Retorna geometria do timer (incluindo janela oculta) em dict {x,y,w,h}."""
+    def _get_live_timer_geometry(self):
+        """Retorna a geometria absoluta atual do timer, ou None se oculto/indisponível."""
         if self.timer_window is None:
-            return self._timer_geom
+            return None
 
         tw = self.timer_window.window
-        # Quando oculto (withdrawn), usamos o cache para não sobrescrever o formato
-        # recém-definido no preview com geometria antiga.
+        # Quando oculto (withdrawn), o cache relativo em self._timer_geom é a fonte
+        # de verdade; retornar None evita converter coordenadas duas vezes.
         try:
             if tw.state() == 'withdrawn':
-                return self._timer_geom
+                return None
         except Exception:
-            pass
+            return None
 
         try:
             geometry = tw.geometry()
@@ -701,16 +756,47 @@ class ControlWindow:
         except Exception:
             pass
 
-        return self._timer_geom
+        return None
+
+    def _sync_preview_text(self):
+        """Centraliza o texto do timer no retângulo e escala a fonte ao preview"""
+        coords = self.map_canvas.coords(self._map_rect)
+        if not coords:
+            return
+        rx1, ry1, rx2, ry2 = coords
+        cx = (rx1 + rx2) / 2
+        cy = (ry1 + ry2) / 2
+        sy = self._map_canvas_h / self._map_screen_h
+        size = max(6, int(self.current_format["font_size"] * sy))
+        self.map_canvas.coords(self.preview_label, cx, cy)
+        try:
+            self.map_canvas.itemconfig(
+                self.preview_label,
+                font=(self.current_format["font_family"], size)
+            )
+        except Exception:
+            self.map_canvas.itemconfig(self.preview_label, font=("Arial", size))
 
     def _refresh_position_map(self):
         """Atualiza o mapa de posição com a geometria atual do timer"""
         # Não atualiza enquanto o usuário está interagindo (evita salto ao arrastar)
         if not getattr(self, '_map_dragging', False):
             try:
-                if self.timer_window is not None and hasattr(self, 'map_canvas'):
-                    g = self._get_timer_geometry_snapshot()
-                    self._timer_geom = g
+                if hasattr(self, 'map_canvas'):
+                    monitor_x, monitor_y = 0, 0
+                    if self._monitors and self._selected_monitor_index < len(self._monitors):
+                        m = self._monitors[self._selected_monitor_index]
+                        monitor_x, monitor_y = m.x, m.y
+
+                    live = self._get_live_timer_geometry()
+                    if live is not None:
+                        self._timer_geom = {
+                            'x': live['x'] - monitor_x,
+                            'y': live['y'] - monitor_y,
+                            'w': live['w'],
+                            'h': live['h'],
+                        }
+                    g = self._timer_geom
 
                     sx = self._map_canvas_w / self._map_screen_w
                     sy = self._map_canvas_h / self._map_screen_h
@@ -725,6 +811,7 @@ class ControlWindow:
                         self._map_coord_text,
                         text=f"{g['x']},{g['y']}  {g['w']}×{g['h']}"
                     )
+                    self._sync_preview_text()
             except Exception:
                 pass
         self.window.after(200, self._refresh_position_map)
@@ -841,7 +928,14 @@ class ControlWindow:
             x2 = max(x2 + dx, x1 + min_w_map)
             y2 = max(y2 + dy, y1 + min_h_map)
 
+        # Clamp rect to canvas bounds
+        x1 = max(0, min(x1, self._map_canvas_w - min_w_map))
+        y1 = max(0, min(y1, self._map_canvas_h - min_h_map))
+        x2 = max(x1 + min_w_map, min(x2, self._map_canvas_w))
+        y2 = max(y1 + min_h_map, min(y2, self._map_canvas_h))
+
         self.map_canvas.coords(self._map_rect, x1, y1, x2, y2)
+        self._sync_preview_text()
 
         sx = self._map_screen_w / self._map_canvas_w
         sy = self._map_screen_h / self._map_canvas_h
@@ -885,8 +979,20 @@ class ControlWindow:
                 real_h = max(real_h, min_size)
                 real_w = max(min_size, int(real_h * ratio))
 
+        monitor_x, monitor_y = 0, 0
+        monitor_label = "Monitor 1 (padrão)"
+        if self._monitors and self._selected_monitor_index < len(self._monitors):
+            m = self._monitors[self._selected_monitor_index]
+            monitor_x, monitor_y = m.x, m.y
+            monitor_label = f"Monitor {self._selected_monitor_index + 1} ({m.width}x{m.height} @ {m.x},{m.y})"
+
         self._timer_geom = {'x': real_x, 'y': real_y, 'w': real_w, 'h': real_h}
-        self.timer_window.window.geometry(f"{real_w}x{real_h}+{real_x}+{real_y}")
+        abs_x = real_x + monitor_x
+        abs_y = real_y + monitor_y
+        print(f"[Timer] Reposicionado via mapa | {monitor_label} | "
+              f"Posição: {real_x},{real_y} (relativa) -> {abs_x},{abs_y} (absoluta) | "
+              f"Tamanho: {real_w}x{real_h}")
+        self.timer_window.window.geometry(f"{real_w}x{real_h}+{abs_x}+{abs_y}")
 
     def _open_format_modal(self):
         """Abre o modal de formatação"""
@@ -902,22 +1008,17 @@ class ControlWindow:
         
         # No preview do controle, não usamos transparência real; mostramos a cor escolhida
         bg_color = new_format["bg_color"]
-        
-        # Atualizar preview
+
+        # Atualizar preview (retângulo do timer no mapa de posição)
         try:
-            self.preview_canvas.config(bg=bg_color)
+            self.preview_canvas.itemconfig(self._map_rect, fill=bg_color)
             self.preview_canvas.itemconfig(
                 self.preview_label,
-                fill=new_format["fg_color"],
-                font=(new_format["font_family"], 34)
+                fill=new_format["fg_color"]
             )
-        except:
-            self.preview_canvas.config(bg=bg_color)
-            self.preview_canvas.itemconfig(
-                self.preview_label,
-                fill=new_format["fg_color"],
-                font=("Arial", 34)
-            )
+            self._sync_preview_text()
+        except Exception:
+            pass
         
         # Atualizar janela do timer
         if self.timer_window is not None:
@@ -1227,23 +1328,73 @@ class ControlWindow:
     
     # Métodos para suporte a múltiplos monitores
     
-    def _get_monitors_list(self):
+    def _get_monitors_list(self, verbose=True):
         """Obtém a lista de monitores disponíveis"""
-        print("\n=== DEBUG: _get_monitors_list chamada ===")
-        print(f"get_monitors disponível: {get_monitors is not None}")
-        
         if get_monitors is None:
-            print("DEBUG: get_monitors é None - biblioteca screeninfo não disponível")
+            if verbose:
+                print("[Timer] screeninfo não disponível — monitor único assumido")
             return []
         try:
             monitors = list(get_monitors())
-            print(f"DEBUG: {len(monitors)} monitor(es) detectado(s)")
-            for i, mon in enumerate(monitors):
-                print(f"  Monitor {i}: {mon}")
+            if verbose:
+                for i, mon in enumerate(monitors):
+                    primary = " [Principal]" if getattr(mon, 'is_primary', False) else ""
+                    print(f"[Timer] Monitor {i + 1}{primary}: {mon.width}x{mon.height} @ {mon.x},{mon.y}")
             return monitors
         except Exception as e:
-            print(f"DEBUG: Erro ao obter monitores: {e}")
+            if verbose:
+                print(f"[Timer] Erro ao obter monitores: {e}")
             return []
+
+    def _monitors_signature(self, monitors):
+        """Assinatura da configuração de monitores para detectar mudanças"""
+        return [
+            (getattr(m, 'name', ''), m.x, m.y, m.width, m.height)
+            for m in monitors
+        ]
+
+    def _check_monitors_changed(self):
+        """Re-escaneia os monitores e atualiza a interface se houve mudança (hot-plug)"""
+        try:
+            new_monitors = self._get_monitors_list(verbose=False)
+        except Exception:
+            return
+        if self._monitors_signature(new_monitors) != self._monitors_signature(self._monitors):
+            self._on_monitors_changed(new_monitors)
+
+    def _poll_monitors(self):
+        """Polling periódico para reconhecer telas conectadas com o app já aberto"""
+        self._check_monitors_changed()
+        self.window.after(3000, self._poll_monitors)
+
+    def _on_monitors_changed(self, new_monitors):
+        """Atualiza lista, preview e projeção após mudança nos monitores"""
+        old_name = None
+        if self._monitors and self._selected_monitor_index < len(self._monitors):
+            old_name = getattr(self._monitors[self._selected_monitor_index], 'name', None)
+
+        self._monitors = new_monitors
+        print(f"[Timer] Mudança nos monitores detectada — {len(new_monitors)} monitor(es) ativo(s)")
+        for i, mon in enumerate(new_monitors):
+            primary = " [Principal]" if getattr(mon, 'is_primary', False) else ""
+            print(f"[Timer] Monitor {i + 1}{primary}: {mon.width}x{mon.height} @ {mon.x},{mon.y}")
+
+        self._populate_monitors_listbox()
+
+        # Tentar manter o monitor selecionado anteriormente
+        if old_name:
+            for i, m in enumerate(new_monitors):
+                if getattr(m, 'name', None) == old_name:
+                    self._selected_monitor_index = i
+                    self.monitors_listbox.selection_clear(0, tk.END)
+                    self.monitors_listbox.selection_set(i)
+                    break
+
+        self._update_map_for_selected_monitor()
+
+        # Se estiver projetando, reposicionar no monitor válido
+        if self.is_projected:
+            self._apply_projection_geometry()
     
     def _populate_monitors_listbox(self):
         """Preenche o listbox com a lista de monitores"""
@@ -1272,7 +1423,10 @@ class ControlWindow:
         
         # Bind para mudança de seleção
         self.monitors_listbox.bind('<<ListboxSelect>>', self._on_monitor_select)
-    
+
+        # Ajustar o preview às proporções do monitor selecionado
+        self._update_map_for_selected_monitor()
+
     def _on_monitor_select(self, event):
         """Callback quando um monitor é selecionado"""
         selection = self.monitors_listbox.curselection()
@@ -1280,24 +1434,92 @@ class ControlWindow:
             self._selected_monitor_index = selection[0]
             # Atualizar o mapa de posição para o monitor selecionado
             self._update_map_for_selected_monitor()
-    
+            # Se já estiver projetando, mover o timer para o novo monitor
+            if self.is_projected:
+                self._apply_projection_geometry()
+
     def _update_map_for_selected_monitor(self):
         """Atualiza o mapa de posição para o monitor selecionado"""
         if self._selected_monitor_index >= len(self._monitors):
             return
-        
+
         monitor = self._monitors[self._selected_monitor_index]
         self._map_screen_w = monitor.width
         self._map_screen_h = monitor.height
-        
+
         # Redimensionar o canvas se necessário
         new_canvas_w = int(self._map_canvas_h * self._map_screen_w / self._map_screen_h)
         if new_canvas_w != self._map_canvas_w:
             self._map_canvas_w = new_canvas_w
             self.map_canvas.config(width=self._map_canvas_w)
+            self.map_canvas.coords(
+                self._map_coord_text,
+                self._map_canvas_w // 2,
+                self._map_canvas_h - 8
+            )
+
+        # Redesenhar o retângulo do timer com as novas proporções
+        if hasattr(self, 'map_canvas') and hasattr(self, '_map_rect'):
+            # Garantir que a geometria caiba no monitor selecionado
+            g = self._timer_geom
+            w = min(g['w'], monitor.width)
+            h = min(g['h'], monitor.height)
+            x = max(0, min(g['x'], monitor.width - w))
+            y = max(0, min(g['y'], monitor.height - h))
+            g = {'x': x, 'y': y, 'w': w, 'h': h}
+            self._timer_geom = g
+
+            sx = self._map_canvas_w / self._map_screen_w
+            sy = self._map_canvas_h / self._map_screen_h
+
+            rx1 = int(g['x'] * sx)
+            ry1 = int(g['y'] * sy)
+            rx2 = int((g['x'] + g['w']) * sx)
+            ry2 = int((g['y'] + g['h']) * sy)
+
+            self.map_canvas.coords(self._map_rect, rx1, ry1, rx2, ry2)
+            self.map_canvas.itemconfig(
+                self._map_coord_text,
+                text=f"{g['x']},{g['y']}  {g['w']}×{g['h']}"
+            )
+            self._sync_preview_text()
+    
+    def _apply_monitor_to_preview(self):
+        """Define o monitor onde o timer será exibido ao projetar"""
+        selection = self.monitors_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione um monitor primeiro.")
+            return
+
+        if not self._monitors:
+            messagebox.showwarning("Aviso", "Nenhum monitor detectado.")
+            return
+
+        monitor_index = selection[0]
+        if monitor_index >= len(self._monitors):
+            return
+
+        monitor = self._monitors[monitor_index]
+        self._selected_monitor_index = monitor_index
+        self._update_map_for_selected_monitor()
+        if self.is_projected:
+            self._apply_projection_geometry()
+
+        print(f"[Timer] Monitor {monitor_index + 1} definido para projeção | "
+              f"{monitor.width}x{monitor.height} @ {monitor.x},{monitor.y}")
+
+        messagebox.showinfo(
+            "Monitor Definido",
+            f"Timer será exibido no Monitor {monitor_index + 1}\n"
+            f"Resolução: {monitor.width}x{monitor.height}\n\n"
+            f"Ative a projeção para visualizar."
+        )
     
     def _identify_screens(self):
         """Exibe janelas de identificação em cada monitor"""
+        # Re-escanear para reconhecer telas conectadas após abrir o app
+        self._check_monitors_changed()
+
         print("\n=== DEBUG: _identify_screens chamada ===")
         print(f"Número de monitores detectados: {len(self._monitors)}")
         print(f"get_monitors disponível: {get_monitors is not None}")

@@ -1,0 +1,37 @@
+{
+  "nome": "Timer Desktop para Segunda Tela",
+  "descricao_curta": "Aplicativo desktop com timer de exibição independente ideal para projeção em segunda tela ou projetor",
+  "descricao_detalhada": "Sistema desktop desenvolvido em Python com interface gráfica Tkinter que oferece uma janela de controle principal e uma janela de exibição independente borderless para timer. Suporta modos cronômetro e contagem regressiva, com personalização completa de cores, fontes e tamanhos, incluindo sistema de presets e atalhos de teclado para operação eficiente.",
+  "problema_resolvido": "Necessidade de exibir contadores de tempo em telas secundárias ou projetores durante apresentações, eventos ou gravações, mantendo o controle discreto na tela principal",
+  "publico_alvo": "Apresentadores, professores, streamers, produtores de conteúdo e profissionais que necessitam exibir timers em segunda tela",
+  "funcionalidades": [
+    "Interface dupla (controle e exibição independente)",
+    "Modos de timer (crescente e decrescente)",
+    "Personalização completa de cores e fontes",
+    "Modal de formatação com preview em tempo real",
+    "Janela borderless ideal para projeção",
+    "Controle de posição e redimensionamento",
+    "Always on top quando travado",
+    "Sistema de presets para salvar configurações",
+    "Atalhos de teclado comprehensive",
+    "Centralização automática em cantos da tela"
+  ],
+  "tecnologias": [
+    "Python 3.x",
+    "Tkinter (GUI framework)",
+    "Threading (para operações assíncronas)",
+    "screeninfo (detecção de múltiplos monitores)",
+    "PyInstaller (geração de executáveis)"
+  ],
+  "arquitetura": "Arquitetura modular com separação de responsabilidades: TimerLogic (lógica de negócio), TimerWindow (exibição), ControlWindow (interface principal), FormatModal (personalização). Comunicação via callbacks e threading para operações não-bloqueantes.",
+  "diferenciais": [
+    "Janela de exibição totalmente independente e borderless",
+    "Sistema de presets completo com atalhos",
+    "Redimensionamento dinâmico com ajuste automático de fonte",
+    "Controle granular de posicionamento e travamento",
+    "Interface profissional para apresentações",
+    "Zero dependências externas além do Python padrão",
+    "Distribuição como executável independente"
+  ],
+  "link": "https://github.com/santos-savio/timer-segundaTela"
+}
