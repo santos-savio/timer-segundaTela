@@ -74,8 +74,13 @@ class TimerLogic:
         """Inicia o timer"""
         if self._state != TimerState.RUNNING:
             self._state = TimerState.RUNNING
-            self._stop_event.clear()
-            self._thread = Thread(target=self._run_timer, daemon=True)
+            # Sinalizar a thread antiga (se existir) e criar um Event novo para a
+            # nova thread; compartilhar o mesmo Event permitia que a thread antiga
+            # continuasse viva após um pause/start rápido, dobrando a velocidade.
+            self._stop_event.set()
+            stop_event = Event()
+            self._stop_event = stop_event
+            self._thread = Thread(target=self._run_timer, args=(stop_event,), daemon=True)
             self._thread.start()
             self._notify_state_change()
     
@@ -99,20 +104,29 @@ class TimerLogic:
         self._notify_update()
         self._notify_state_change()
     
-    def _run_timer(self):
+    def _run_timer(self, stop_event: Event):
         """Thread principal do timer"""
-        while not self._stop_event.is_set():
+        # Agenda os ticks pelo relógio monotônico para não acumular atraso
+        next_tick = time.monotonic() + 1
+        while True:
+            delay = next_tick - time.monotonic()
+            # Espera até o próximo tick; retorna True se pausado/resetado
+            if stop_event.wait(delay if delay > 0 else 0):
+                break
+            next_tick += 1
+
             if self._mode == TimerMode.COUNTDOWN:
+                self._current_time -= 1
                 if self._current_time <= 0:
+                    self._current_time = 0
+                    self._notify_update()
                     self._state = TimerState.STOPPED
                     self._notify_state_change()
                     break
-                self._current_time -= 1
             else:  # STOPWATCH
                 self._current_time += 1
-            
+
             self._notify_update()
-            time.sleep(1)
     
     def _notify_update(self):
         """Notifica a UI sobre atualização do tempo"""
