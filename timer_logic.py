@@ -56,7 +56,18 @@ class TimerLogic:
         if self._state == TimerState.STOPPED:
             self._current_time = hours * 3600 + minutes * 60 + seconds
             self._notify_update()
-    
+
+    def force_set_time(self, hours: int, minutes: int, seconds: int):
+        """Define o tempo atual imediatamente, independente do estado (rodando, pausado ou parado)"""
+        self._hours = hours
+        self._minutes = minutes
+        self._seconds = seconds
+        self._initial_hours = hours
+        self._initial_minutes = minutes
+        self._initial_seconds = seconds
+        self._current_time = hours * 3600 + minutes * 60 + seconds
+        self._notify_update()
+
     def set_mode(self, mode: str):
         """Define o modo do timer (countdown ou stopwatch)"""
         self._mode = mode

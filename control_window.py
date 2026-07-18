@@ -522,15 +522,13 @@ class ControlWindow:
         self._on_timer_update(self.timer_logic.format_time())
     
     def _force_time_update(self):
-        """Força atualização imediata do tempo no preview e timer principal"""
+        """Força atualização imediata do tempo, em qualquer estado do timer (rodando, pausado ou parado)"""
         hours = self.hours_var.get()
         minutes = self.minutes_var.get()
         seconds = self.seconds_var.get()
-        # Atualiza o tempo inicial no TimerLogic
-        self.timer_logic.set_time(hours, minutes, seconds)
-        # Força atualização imediata independente do estado do timer
-        current_time_str = self.timer_logic.format_time()
-        self._on_timer_update(current_time_str)
+        # force_set_time atualiza o tempo atual e notifica via callback,
+        # que já propaga para o preview e para a janela projetada.
+        self.timer_logic.force_set_time(hours, minutes, seconds)
     
     def _on_mode_change(self):
         """Callback para mudança no modo"""
