@@ -5,6 +5,7 @@ Janela de controle principal do timer.
 
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
+from tkinter import font as tkfont
 from format_modal import FormatModal
 import os
 import csv
@@ -756,6 +757,24 @@ class ControlWindow:
 
         return None
 
+    def _fit_font_to_size(self, width, height, pad_w=0.92, pad_h=0.9):
+        """Tamanho de fonte (px de tela) para o texto do timer preencher width×height.
+
+        Mede o texto atual em um tamanho de referência e escala proporcionalmente
+        para que ele ocupe a maior parte possível do quadro sem transbordar.
+        """
+        family = self.current_format.get("font_family", "Arial")
+        text = self.timer_logic.format_time() or "00:00"
+        ref = 100
+        try:
+            f = tkfont.Font(family=family, size=ref)
+        except Exception:
+            f = tkfont.Font(family="Arial", size=ref)
+        text_w = max(1, f.measure(text))
+        text_h = max(1, f.metrics("linespace"))
+        scale = min((width * pad_w) / text_w, (height * pad_h) / text_h)
+        return max(8, int(ref * scale))
+
     def _sync_preview_text(self):
         """Centraliza o texto do timer no retângulo e escala a fonte ao preview"""
         coords = self.map_canvas.coords(self._map_rect)
@@ -933,7 +952,6 @@ class ControlWindow:
         y2 = max(y1 + min_h_map, min(y2, self._map_canvas_h))
 
         self.map_canvas.coords(self._map_rect, x1, y1, x2, y2)
-        self._sync_preview_text()
 
         sx = self._map_screen_w / self._map_canvas_w
         sy = self._map_screen_h / self._map_canvas_h
@@ -941,6 +959,12 @@ class ControlWindow:
         real_y = int(y1 * sy)
         real_w = int((x2 - x1) * sx)
         real_h = int((y2 - y1) * sy)
+
+        # Ao redimensionar, a fonte acompanha o quadro para preenchê-lo
+        if mode is not None:
+            self.current_format["font_size"] = self._fit_font_to_size(real_w, real_h)
+
+        self._sync_preview_text()
         self.map_canvas.itemconfig(
             self._map_coord_text,
             text=f"{real_x},{real_y}  {real_w}×{real_h}"
@@ -987,10 +1011,20 @@ class ControlWindow:
         self._timer_geom = {'x': real_x, 'y': real_y, 'w': real_w, 'h': real_h}
         abs_x = real_x + monitor_x
         abs_y = real_y + monitor_y
+
+        # Fonte final que preenche o quadro, aplicada ao preview e ao timer
+        self.current_format["font_size"] = self._fit_font_to_size(real_w, real_h)
+        self._sync_preview_text()
+
         print(f"[Timer] Reposicionado via mapa | {monitor_label} | "
               f"Posição: {real_x},{real_y} (relativa) -> {abs_x},{abs_y} (absoluta) | "
-              f"Tamanho: {real_w}x{real_h}")
+              f"Tamanho: {real_w}x{real_h} | Fonte: {self.current_format['font_size']}")
         self.timer_window.window.geometry(f"{real_w}x{real_h}+{abs_x}+{abs_y}")
+        fmt = self.current_format
+        self.timer_window.update_formatting(
+            fmt["bg_color"], fmt["fg_color"], fmt["font_family"],
+            fmt["font_size"], fmt.get("transparent", False)
+        )
 
     def _open_format_modal(self):
         """Abre o modal de formatação"""
