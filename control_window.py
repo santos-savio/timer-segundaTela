@@ -29,6 +29,10 @@ class ControlWindow:
             "font_size": 120,
             "transparent": False
         }
+
+        # Cor e estado de tempo excedido (contagem regressiva negativa)
+        self.overtime_color = "#FF0000"
+        self._is_overtime = False
         
         # Criar janela principal
         self.window = tk.Tk()
@@ -494,9 +498,13 @@ class ControlWindow:
     
     def _on_timer_update(self, time_str: str):
         """Callback para atualização do timer"""
+        # Tempo excedido (contagem regressiva negativa) fica em vermelho
+        self._is_overtime = time_str.startswith('-')
+        preview_color = self.overtime_color if self._is_overtime else self.current_format["fg_color"]
+
         # Atualizar preview
-        self.preview_canvas.itemconfig(self.preview_label, text=time_str)
-        
+        self.preview_canvas.itemconfig(self.preview_label, text=time_str, fill=preview_color)
+
         # Atualizar janela do timer se estiver visível
         if self.is_projected and self.timer_window is not None:
             self.timer_window.update_time(time_str)
@@ -1044,9 +1052,10 @@ class ControlWindow:
         # Atualizar preview (retângulo do timer no mapa de posição)
         try:
             self.preview_canvas.itemconfig(self._map_rect, fill=bg_color)
+            preview_fg = self.overtime_color if self._is_overtime else new_format["fg_color"]
             self.preview_canvas.itemconfig(
                 self.preview_label,
-                fill=new_format["fg_color"]
+                fill=preview_fg
             )
             self._sync_preview_text()
         except Exception:

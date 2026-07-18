@@ -3,3 +3,4 @@ TimerSegundaTela.spec
 build/
 dist/
 *.spec
+private/

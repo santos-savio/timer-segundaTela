@@ -16,6 +16,8 @@ class TimerWindow:
         # Configurações iniciais
         self.bg_color = "#000000"  # Preto
         self.fg_color = "#FFFFFF"  # Branco
+        self.overtime_color = "#FF0000"  # Vermelho para tempo excedido
+        self._is_overtime = False
         self.font_family = "Arial"
         # Calcular tamanho inicial da fonte baseado no tamanho padrão da janela
         initial_window_height = 400
@@ -267,8 +269,10 @@ class TimerWindow:
                 self._update_font()
     
     def update_time(self, time_str: str):
-        """Atualiza o display do timer"""
-        self.timer_label.config(text=time_str)
+        """Atualiza o display do timer, ficando vermelho quando o tempo é excedido"""
+        self._is_overtime = time_str.startswith('-')
+        color = self.overtime_color if self._is_overtime else self.fg_color
+        self.timer_label.config(text=time_str, fg=color)
     
     def update_formatting(self, bg_color: str, fg_color: str, font_family: str, font_size: int, transparent: bool = False):
         """Atualiza a formatação do timer"""
@@ -297,7 +301,8 @@ class TimerWindow:
             # Em modo normal, alinhar a cor de fundo da janela ao label
             self.window.configure(bg=bg_color)
 
-        self.timer_label.config(bg=bg_color, fg=fg_color)
+        color = self.overtime_color if self._is_overtime else fg_color
+        self.timer_label.config(bg=bg_color, fg=color)
         self._update_font()
     
     def _update_font(self):

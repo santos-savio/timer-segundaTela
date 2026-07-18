@@ -127,13 +127,9 @@ class TimerLogic:
             next_tick += 1
 
             if self._mode == TimerMode.COUNTDOWN:
+                # Ao chegar em zero, continua contando para negativo em vez de
+                # parar, para sinalizar o tempo excedido (exibido em vermelho).
                 self._current_time -= 1
-                if self._current_time <= 0:
-                    self._current_time = 0
-                    self._notify_update()
-                    self._state = TimerState.STOPPED
-                    self._notify_state_change()
-                    break
             else:  # STOPWATCH
                 self._current_time += 1
 
@@ -151,15 +147,18 @@ class TimerLogic:
             self._state_callback(self._state)
     
     def format_time(self) -> str:
-        """Formata o tempo atual como string"""
-        hours = self._current_time // 3600
-        minutes = (self._current_time % 3600) // 60
-        seconds = self._current_time % 60
-        
+        """Formata o tempo atual como string, com sinal negativo se excedido"""
+        is_overtime = self._current_time < 0
+        total = abs(self._current_time)
+        hours = total // 3600
+        minutes = (total % 3600) // 60
+        seconds = total % 60
+        sign = "-" if is_overtime else ""
+
         if hours > 0:
-            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            return f"{sign}{hours:02d}:{minutes:02d}:{seconds:02d}"
         else:
-            return f"{minutes:02d}:{seconds:02d}"
+            return f"{sign}{minutes:02d}:{seconds:02d}"
     
     def get_current_seconds(self) -> int:
         """Retorna o tempo atual em segundos"""
