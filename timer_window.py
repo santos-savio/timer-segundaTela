@@ -28,6 +28,7 @@ class TimerWindow:
         self.is_visible = False
         self._font_manually_set = False
         self.transparent = False
+        self.always_on_top = False
         
         # Variáveis para redimensionamento
         self.resize_mode = None  # None, 'left', 'right', 'top', 'bottom', 'corner'
@@ -75,12 +76,11 @@ class TimerWindow:
         
         self.window.geometry(f"{window_width}x{window_height}+{x}+{y}")
         
-        # Always on top quando travado
-        if self.is_locked:
-            self.window.attributes("-topmost", True)
-        
         # Começar oculto para evitar flash ao iniciar a aplicação
         self.window.withdraw()
+
+        # Always on top quando travado ou quando fixado manualmente
+        self._apply_topmost()
     
     def _setup_bindings(self):
         """Configura eventos de mouse para movimentação e redimensionamento"""
@@ -335,15 +335,24 @@ class TimerWindow:
     def set_locked(self, locked: bool):
         """Define se a janela está travada ou não"""
         self.is_locked = locked
-        
+
         if locked:
-            # Travada: always on top, não pode mover/redimensionar
-            self.window.attributes("-topmost", True)
+            # Travada: não pode mover/redimensionar
             self.window.config(cursor="arrow")
         else:
             # Destravada: pode mover/redimensionar
-            self.window.attributes("-topmost", False)
             self.window.config(cursor="fleur")
+
+        self._apply_topmost()
+
+    def set_always_on_top(self, always_on_top: bool):
+        """Define se a janela deve permanecer sempre acima de todas as outras janelas"""
+        self.always_on_top = always_on_top
+        self._apply_topmost()
+
+    def _apply_topmost(self):
+        """Aplica o estado 'topmost' considerando trava e fixação manual"""
+        self.window.attributes("-topmost", self.is_locked or self.always_on_top)
     
     def get_geometry(self) -> str:
         """Retorna a geometria atual da janela"""

@@ -242,7 +242,17 @@ class ControlWindow:
             command=self._toggle_adjust
         )
         self.adjust_check.pack(anchor="w")
-        
+
+        # Sempre em primeiro plano
+        self.always_on_top_var = tk.BooleanVar(value=False)
+        self.always_on_top_check = ttk.Checkbutton(
+            options_frame,
+            text="Sempre em primeiro plano",
+            variable=self.always_on_top_var,
+            command=self._toggle_always_on_top
+        )
+        self.always_on_top_check.pack(anchor="w")
+
         # Botão para centralizar na posição inferior direita
         self.center_btn = ttk.Button(
             options_frame,
@@ -619,7 +629,12 @@ class ControlWindow:
         if self.timer_window is not None:
             self.timer_window.set_locked(is_locked)
         self._update_map_interaction()
-    
+
+    def _toggle_always_on_top(self):
+        """Alterna se o timer permanece sempre acima de todas as janelas"""
+        if self.timer_window is not None:
+            self.timer_window.set_always_on_top(self.always_on_top_var.get())
+
     def _center_bottom_right(self):
         """Posiciona o timer no canto inferior direito do monitor selecionado"""
         if self.timer_window is None:
